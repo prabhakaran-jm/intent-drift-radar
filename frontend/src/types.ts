@@ -17,6 +17,7 @@ export interface ReasoningCard {
 }
 
 export interface AnalysisResult {
+  analysis_id: string
   baseline_intent: IntentBlock
   current_intent: IntentBlock
   drift_detected: boolean
@@ -28,8 +29,16 @@ export interface AnalysisResult {
   one_question: string | null
 }
 
+export interface FeedbackItem {
+  analysis_id: string
+  verdict: 'confirm' | 'reject'
+  comment?: string
+  created_at: string
+}
+
 export interface AnalyzeRequest {
   signals: string[]
+  feedback?: FeedbackItem[]
 }
 
 export interface Signal {

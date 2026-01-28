@@ -1,12 +1,25 @@
 """FastAPI app with /api/health, /api/analyze, and /api/feedback endpoints."""
 
+import uuid
+from datetime import datetime
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .models import AnalyzeRequest, AnalysisResult, FeedbackRequest
 from .store import append_feedback, list_feedback
 
 app = FastAPI(title="Intent Drift Radar API")
+
+# Add CORS middleware to allow frontend requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/api/health")
@@ -21,9 +34,20 @@ def analyze(request: AnalyzeRequest) -> AnalysisResult:
     Analyze signals and return mocked AnalysisResult conforming to schema.
     
     Currently returns a mocked response matching docs/ai-studio/sample-output.json.
+    Accepts prior feedback in the request (if provided).
     """
+    # Generate unique analysis_id
+    analysis_id = str(uuid.uuid4())
+    
+    # Note: In a real implementation, prior feedback would influence the analysis
+    # For now, we just acknowledge it's present
+    if request.feedback:
+        # Feedback received but not yet used in mocked analysis
+        pass
+    
     # Mocked response matching the sample schema
     result = AnalysisResult(
+        analysis_id=analysis_id,
         baseline_intent={
             "title": "Kids Educational Application",
             "detail": "Development of an education-first learning app for children with a specific focus on curriculum content and quiz mechanisms."
@@ -77,12 +101,13 @@ def analyze(request: AnalyzeRequest) -> AnalysisResult:
 def feedback(request: FeedbackRequest) -> dict:
     """
     Accept feedback payload and persist it to local JSON store.
+    Stores verdict ('confirm' or 'reject'), comment, and created_at timestamp.
     """
     feedback_data = {
         "analysis_id": request.analysis_id,
-        "feedback_type": request.feedback_type,
+        "verdict": request.verdict,
         "comment": request.comment,
-        "metadata": request.metadata
+        "created_at": datetime.utcnow().isoformat() + "Z"
     }
     append_feedback(feedback_data)
     return {"ok": True, "saved": True}

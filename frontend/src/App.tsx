@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SignalsPanel, DEMO_SIGNALS } from './components/SignalsPanel'
 import { SettingsPanel, DEFAULT_SETTINGS } from './components/SettingsPanel'
 import { OutputPanel } from './components/OutputPanel'
-import { analyze } from './api'
-import type { Signal, AnalysisResult, Settings } from './types'
+import { analyze, submitFeedback } from './api'
+import type { Signal, AnalysisResult, Settings, FeedbackItem } from './types'
+
+const FEEDBACK_STORAGE_KEY = 'intent-drift-feedback'
 
 function App() {
   const [signals, setSignals] = useState<Signal[]>([])
@@ -11,6 +13,25 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [feedbackHistory, setFeedbackHistory] = useState<FeedbackItem[]>([])
+  const [lastFeedback, setLastFeedback] = useState<FeedbackItem | null>(null)
+
+  // Load feedback from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(FEEDBACK_STORAGE_KEY)
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as FeedbackItem[]
+        setFeedbackHistory(parsed)
+        // Set last feedback if available
+        if (parsed.length > 0) {
+          setLastFeedback(parsed[parsed.length - 1])
+        }
+      } catch {
+        // Invalid JSON, ignore
+      }
+    }
+  }, [])
 
   const handleAddSignal = (signal: Signal) => {
     setSignals([...signals, signal])
@@ -32,13 +53,40 @@ function App() {
     setError(null)
     try {
       const signalTexts = signals.map((s) => `${s.day}: ${s.content}`)
-      const analysisResult = await analyze(signalTexts)
+      // Include feedback history in the request
+      const analysisResult = await analyze(signalTexts, feedbackHistory.length > 0 ? feedbackHistory : undefined)
       setResult(analysisResult)
+      // Clear last feedback when new analysis comes in
+      setLastFeedback(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze')
       setResult(null)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleFeedback = async (verdict: 'confirm' | 'reject', comment?: string) => {
+    if (!result) return
+
+    try {
+      await submitFeedback(result.analysis_id, verdict, comment)
+      
+      // Create feedback item
+      const feedbackItem: FeedbackItem = {
+        analysis_id: result.analysis_id,
+        verdict,
+        comment,
+        created_at: new Date().toISOString(),
+      }
+      
+      // Update state and localStorage
+      const updated = [...feedbackHistory, feedbackItem]
+      setFeedbackHistory(updated)
+      setLastFeedback(feedbackItem)
+      localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(updated))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit feedback')
     }
   }
 
@@ -81,7 +129,13 @@ function App() {
         {/* Right Column - Output */}
         <div style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
           <h2 style={{ margin: '0 0 1rem 0' }}>Output</h2>
-          <OutputPanel result={result} loading={loading} error={error} />
+          <OutputPanel 
+            result={result} 
+            loading={loading} 
+            error={error}
+            onFeedback={handleFeedback}
+            lastFeedback={lastFeedback}
+          />
         </div>
       </div>
     </div>

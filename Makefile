@@ -21,7 +21,7 @@ build: install-frontend
 
 # Run backend only (serves built frontend from backend/static when present)
 run-backend:
-	uvicorn backend.app.main:app --reload --app-dir .
+	uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000 --app-dir .
 
 # Run frontend dev server only (proxies /api to backend :8000)
 run-frontend:

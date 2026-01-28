@@ -25,6 +25,7 @@ class ReasoningCard(BaseModel):
 
 class AnalysisResult(BaseModel):
     """Complete analysis result matching the schema."""
+    analysis_id: str = Field(description="Unique identifier for this analysis")
     baseline_intent: IntentBlock
     current_intent: IntentBlock
     drift_detected: bool
@@ -36,14 +37,22 @@ class AnalysisResult(BaseModel):
     one_question: Optional[str] = Field(default=None, description="Only set if confidence is 0.40-0.70")
 
 
+class FeedbackItem(BaseModel):
+    """Single feedback item."""
+    analysis_id: str
+    verdict: str = Field(description="'confirm' or 'reject'")
+    comment: Optional[str] = None
+    created_at: str = Field(description="ISO timestamp")
+
+
 class AnalyzeRequest(BaseModel):
     """Request body for /api/analyze endpoint."""
     signals: List[str] = Field(description="List of signals/timeline entries to analyze")
+    feedback: Optional[List[FeedbackItem]] = Field(default=None, description="Prior feedback items to consider")
 
 
 class FeedbackRequest(BaseModel):
     """Request body for /api/feedback endpoint."""
-    analysis_id: Optional[str] = Field(default=None, description="Optional ID linking to analysis")
-    feedback_type: str = Field(description="Type of feedback (e.g., 'correct', 'incorrect', 'clarification')")
+    analysis_id: str = Field(description="ID linking to analysis")
+    verdict: str = Field(description="'confirm' or 'reject'")
     comment: Optional[str] = Field(default=None, description="Optional comment text")
-    metadata: Optional[dict] = Field(default_factory=dict, description="Optional metadata dict")

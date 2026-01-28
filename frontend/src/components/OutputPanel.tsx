@@ -1,12 +1,14 @@
-import type { AnalysisResult } from '../types'
+import type { AnalysisResult, FeedbackItem } from '../types'
 
 interface OutputPanelProps {
   result: AnalysisResult | null
   loading: boolean
   error: string | null
+  onFeedback: (verdict: 'confirm' | 'reject', comment?: string) => void
+  lastFeedback: FeedbackItem | null
 }
 
-export function OutputPanel({ result, loading, error }: OutputPanelProps) {
+export function OutputPanel({ result, loading, error, onFeedback, lastFeedback }: OutputPanelProps) {
   if (loading) {
     return (
       <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>
@@ -47,6 +49,60 @@ export function OutputPanel({ result, loading, error }: OutputPanelProps) {
       >
         {result.drift_detected ? '⚠️ Drift Detected' : '✓ No Drift Detected'}
       </div>
+
+      {/* Feedback Buttons */}
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <button
+          onClick={() => onFeedback('confirm')}
+          style={{
+            flex: 1,
+            padding: '0.75rem',
+            backgroundColor: '#28a745',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+          }}
+        >
+          ✓ Confirm Drift
+        </button>
+        <button
+          onClick={() => onFeedback('reject')}
+          style={{
+            flex: 1,
+            padding: '0.75rem',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+          }}
+        >
+          ✗ Reject Drift
+        </button>
+      </div>
+
+      {/* Last Feedback */}
+      {lastFeedback && (
+        <div
+          style={{
+            padding: '0.75rem',
+            backgroundColor: lastFeedback.verdict === 'confirm' ? '#d4edda' : '#f8d7da',
+            border: `1px solid ${lastFeedback.verdict === 'confirm' ? '#c3e6cb' : '#f5c6cb'}`,
+            borderRadius: '4px',
+            fontSize: '0.9rem',
+          }}
+        >
+          <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>
+            Last Feedback: {lastFeedback.verdict === 'confirm' ? '✓ Confirmed' : '✗ Rejected'}
+          </div>
+          {lastFeedback.comment && (
+            <div style={{ color: '#666', marginTop: '0.25rem' }}>{lastFeedback.comment}</div>
+          )}
+        </div>
+      )}
 
       {/* Confidence */}
       <div>
