@@ -6,7 +6,8 @@ cd "$(dirname "$0")/.."
 # Frontend proxies /api to http://127.0.0.1:8000
 
 run_backend() {
-  uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000 --app-dir .
+  # Run from project root so backend module can be imported
+  uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000
 }
 
 run_frontend() {

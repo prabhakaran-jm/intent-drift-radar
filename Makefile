@@ -16,12 +16,13 @@ install-frontend:
 	cd frontend && npm install
 
 # Build frontend into backend/static for production / Cloud Run
-build: install-frontend
-	cd frontend && npm run build
+build:
+	./scripts/build.sh
 
 # Run backend only (serves built frontend from backend/static when present)
+# Must run from project root
 run-backend:
-	uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000 --app-dir .
+	uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000
 
 # Run frontend dev server only (proxies /api to backend :8000)
 run-frontend:

@@ -35,14 +35,16 @@ FastAPI backend with Gemini 3 Pro integration for intent drift analysis. Uses st
    - Retry the request with the fallback model
    - Log the final model used
 
-4. Run the server:
+4. Run the server (from project root):
    ```bash
-   uvicorn src.app:app --reload --app-dir .
+   # IMPORTANT: Must run from project root, not from backend/ directory
+   cd /path/to/intent-drift-radar  # project root
+   uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000
    ```
    
-   Or from the project root:
+   Or use the Makefile:
    ```bash
-   uvicorn backend.src.app:app --reload --host 127.0.0.1 --port 8000 --app-dir .
+   make run-backend
    ```
 
 5. Server runs on `http://127.0.0.1:8000`

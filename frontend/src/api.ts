@@ -2,9 +2,10 @@
 
 import type { AnalysisResult, AnalyzeRequest, FeedbackItem, Signal } from './types'
 
-// In dev mode, use relative URLs to leverage Vite proxy
-// In production, use VITE_API_BASE env var or default to relative
-const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? '' : 'http://localhost:8000')
+// Use relative paths by default (same-origin for production)
+// In dev mode, VITE_API_BASE can override to point to backend (e.g., http://localhost:8000)
+// If not set in dev, Vite proxy handles /api routes
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 export async function analyze(signals: Signal[], feedback?: FeedbackItem[]): Promise<AnalysisResult> {
   const payload: AnalyzeRequest = { signals }

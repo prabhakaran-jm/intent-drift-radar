@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS: Settings = {
   thinking_level: 'medium',
 }
 
-export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps) {
+export function SettingsPanel({ settings: _settings, onSettingsChange }: SettingsPanelProps) {
   const [localSettings, setLocalSettings] = useState<Settings>(() => {
     // Initialize from localStorage or use defaults
     const stored = localStorage.getItem('intent-drift-settings')

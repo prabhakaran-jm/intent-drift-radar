@@ -213,3 +213,4 @@ backend/data/*.json
 backend/data/store.json
 backend/static/*
 !backend/static/.gitkeep
+tsconfig.tsbuildinfo

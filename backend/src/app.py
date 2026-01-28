@@ -1,13 +1,16 @@
-"""FastAPI app with /api/health, /api/analyze, and /api/feedback endpoints."""
+"""FastAPI app with /api/health, /api/analyze, and /api/feedback endpoints.
+Also serves built frontend from backend/static/ for single-container deployment."""
 
 import logging
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .models import AnalyzeRequest, AnalysisResult, FeedbackRequest
 from .store import append_feedback, list_feedback
@@ -16,7 +19,10 @@ from .gemini import analyze_intent_drift
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Intent Drift Radar API")
+app = FastAPI(title="Intent Drift Radar")
+
+# Path to static files directory
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # Add CORS middleware to allow frontend requests
 app.add_middleware(
@@ -102,3 +108,29 @@ def feedback(request: FeedbackRequest) -> dict:
 def get_feedback() -> dict:
     """List all feedback entries."""
     return {"feedback": list_feedback()}
+
+
+# Serve static files and SPA (only if static directory exists)
+if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
+    # Mount static assets (JS, CSS, etc.) - Vite outputs these under /assets/
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists() and assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    
+    # SPA catch-all: serve index.html for all non-API routes
+    # This must be registered last so API routes take precedence
+    @app.get("/{path:path}")
+    def serve_spa(path: str):
+        """Serve index.html for SPA routes (all routes except /api/*)."""
+        # API routes are already handled above, so this won't match /api/*
+        # Check if it's a static file first
+        file_path = STATIC_DIR / path
+        if file_path.exists() and file_path.is_file() and not path.startswith("api/"):
+            return FileResponse(file_path)
+        
+        # Otherwise serve index.html for SPA routing
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        else:
+            raise HTTPException(status_code=404, detail="Frontend not built. Run ./scripts/build.sh first.")
