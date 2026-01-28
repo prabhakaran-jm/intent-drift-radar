@@ -210,5 +210,6 @@ __marimo__/
 docs/SRS.md
 frontend/node_modules/
 backend/data/*.json
+backend/data/store.json
 backend/static/*
 !backend/static/.gitkeep
