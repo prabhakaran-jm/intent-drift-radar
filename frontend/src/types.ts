@@ -37,8 +37,9 @@ export interface FeedbackItem {
 }
 
 export interface AnalyzeRequest {
-  signals: string[]
+  signals: Signal[]
   feedback?: FeedbackItem[]
+  settings?: Settings
 }
 
 export interface Signal {

@@ -1,7 +1,7 @@
 """Pydantic models matching docs/ai-studio/sample-output.json schema."""
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 
 class IntentBlock(BaseModel):
@@ -37,6 +37,20 @@ class AnalysisResult(BaseModel):
     one_question: Optional[str] = Field(default=None, description="Only set if confidence is 0.40-0.70")
 
 
+class Signal(BaseModel):
+    """Signal with day, type, and content."""
+    day: str = Field(description="Day label (e.g., 'Day 1')")
+    type: str = Field(description="Signal type (e.g., 'declaration', 'research', 'action', 'question')")
+    content: str = Field(description="Signal content")
+
+
+class Settings(BaseModel):
+    """Analysis settings."""
+    baseline_window_size: int = Field(default=2, ge=1, description="Baseline window size")
+    current_window_size: int = Field(default=2, ge=1, description="Current window size")
+    thinking_level: Literal["low", "medium", "high"] = Field(default="medium", description="Thinking level")
+
+
 class FeedbackItem(BaseModel):
     """Single feedback item."""
     analysis_id: str
@@ -47,7 +61,8 @@ class FeedbackItem(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     """Request body for /api/analyze endpoint."""
-    signals: List[str] = Field(description="List of signals/timeline entries to analyze")
+    signals: List[Signal] = Field(description="List of signals to analyze")
+    settings: Optional[Settings] = Field(default=None, description="Analysis settings")
     feedback: Optional[List[FeedbackItem]] = Field(default=None, description="Prior feedback items to consider")
 
 

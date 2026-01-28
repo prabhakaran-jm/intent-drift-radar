@@ -1,14 +1,20 @@
 """FastAPI app with /api/health, /api/analyze, and /api/feedback endpoints."""
 
+import logging
+import os
 import uuid
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .models import AnalyzeRequest, AnalysisResult, FeedbackRequest
 from .store import append_feedback, list_feedback
+from .gemini import analyze_intent_drift
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Intent Drift Radar API")
 
@@ -31,70 +37,49 @@ def health() -> dict:
 @app.post("/api/analyze", response_model=AnalysisResult)
 def analyze(request: AnalyzeRequest) -> AnalysisResult:
     """
-    Analyze signals and return mocked AnalysisResult conforming to schema.
+    Analyze signals using Gemini 3 Pro and return AnalysisResult conforming to schema.
     
-    Currently returns a mocked response matching docs/ai-studio/sample-output.json.
+    Requires GEMINI_API_KEY environment variable to be set.
     Accepts prior feedback in the request (if provided).
     """
+    # Check for API key
+    if not os.getenv("GEMINI_API_KEY"):
+        logger.error("GEMINI_API_KEY environment variable is not set")
+        raise HTTPException(
+            status_code=500,
+            detail="GEMINI_API_KEY environment variable is not set. Please configure the API key to use the analysis service."
+        )
+    
     # Generate unique analysis_id
     analysis_id = str(uuid.uuid4())
     
-    # Note: In a real implementation, prior feedback would influence the analysis
-    # For now, we just acknowledge it's present
-    if request.feedback:
-        # Feedback received but not yet used in mocked analysis
-        pass
-    
-    # Mocked response matching the sample schema
-    result = AnalysisResult(
-        analysis_id=analysis_id,
-        baseline_intent={
-            "title": "Kids Educational Application",
-            "detail": "Development of an education-first learning app for children with a specific focus on curriculum content and quiz mechanisms."
-        },
-        current_intent={
-            "title": "Creator Monetization Infrastructure",
-            "detail": "Development of a backend tool or platform designed to facilitate content monetization for creators, moving away from the educational vertical."
-        },
-        drift_detected=True,
-        confidence=0.95,
-        drift_direction="EdTech Product → Creator Tooling",
-        evidence=[
-            {"day": "Day 1", "reason": "Initial declaration of a specific B2C educational product goal."},
-            {"day": "Day 4", "reason": "Investigation into payment infrastructure (Stripe/paywalls) which acted as a bridge topic."},
-            {"day": "Day 5", "reason": "Explicit user declaration of a pivot towards the tool discovered during prior research."}
-        ],
-        reasoning_cards=[
-            {
-                "title": "Intent Snapshot (Baseline)",
-                "body": "The user began with a content-centric goal (Day 1–2), focusing on educational pedagogy such as curriculum and quizzes rather than infrastructure.",
-                "refs": ["Day 1", "Day 2"]
-            },
-            {
-                "title": "Intent Snapshot (Current)",
-                "body": "The focus has shifted entirely to enabling technology. The user is now building monetization infrastructure for creators rather than an end-user learning product for children.",
-                "refs": ["Day 5"]
-            },
-            {
-                "title": "Drift Evidence",
-                "body": "Drift followed a mechanism-as-product pattern. The user explored pricing and payments for the original app (Day 3–4), then pivoted to building that infrastructure as the primary product (Day 5).",
-                "refs": ["Day 3", "Day 4", "Day 5"]
-            },
-            {
-                "title": "Temporal Compression",
-                "body": "The pivot occurred rapidly within a 5-day window. The transition from product definition to infrastructure research happened in roughly 48 hours (Day 2 to Day 4), indicating low attachment to the original educational hypothesis.",
-                "refs": ["Day 2", "Day 4", "Day 5"]
-            },
-            {
-                "title": "Drift Signature Explanation",
-                "body": "The drift signature encodes a high-confidence shift from the EdTech domain to Creator Tooling over a 5-day observation window, supported by three converging evidentiary signals.",
-                "refs": ["Day 1", "Day 4", "Day 5"]
-            }
-        ],
-        drift_signature="IDR:v1|dir=EDTECH>CREATOR_TOOLS|span=5d|e=3|conf=0.95",
-        one_question=None
-    )
-    return result
+    try:
+        # Call Gemini API
+        result = analyze_intent_drift(request, analysis_id)
+        return result
+    except ValueError as e:
+        error_msg = str(e)
+        if error_msg.startswith("MODEL_OUTPUT_INVALID"):
+            logger.error(f"Model output validation failed: {error_msg}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "MODEL_OUTPUT_INVALID",
+                    "message": "The AI model returned invalid output. Please try again."
+                }
+            )
+        elif "GEMINI_API_KEY" in error_msg:
+            logger.error(f"API key error: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail="GEMINI_API_KEY environment variable is not set. Please configure the API key to use the analysis service."
+            )
+        else:
+            logger.error(f"Analysis error: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Analysis failed: {error_msg}")
+    except Exception as e:
+        logger.error(f"Unexpected error during analysis: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Unexpected error during analysis: {str(e)}")
 
 
 @app.post("/api/feedback")

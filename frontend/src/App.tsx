@@ -52,9 +52,9 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const signalTexts = signals.map((s) => `${s.day}: ${s.content}`)
+      // Send Signal objects directly
       // Include feedback history in the request
-      const analysisResult = await analyze(signalTexts, feedbackHistory.length > 0 ? feedbackHistory : undefined)
+      const analysisResult = await analyze(signals, feedbackHistory.length > 0 ? feedbackHistory : undefined)
       setResult(analysisResult)
       // Clear last feedback when new analysis comes in
       setLastFeedback(null)

@@ -1,12 +1,12 @@
 /** API client for backend */
 
-import type { AnalysisResult, AnalyzeRequest, FeedbackItem } from './types'
+import type { AnalysisResult, AnalyzeRequest, FeedbackItem, Signal } from './types'
 
 // In dev mode, use relative URLs to leverage Vite proxy
 // In production, use VITE_API_BASE env var or default to relative
 const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? '' : 'http://localhost:8000')
 
-export async function analyze(signals: string[], feedback?: FeedbackItem[]): Promise<AnalysisResult> {
+export async function analyze(signals: Signal[], feedback?: FeedbackItem[]): Promise<AnalysisResult> {
   const payload: AnalyzeRequest = { signals }
   if (feedback && feedback.length > 0) {
     payload.feedback = feedback
