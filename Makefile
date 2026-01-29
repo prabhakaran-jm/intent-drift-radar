@@ -1,6 +1,6 @@
 # Intent Drift Radar – single-container frontend + backend
 
-.PHONY: dev install install-frontend install-backend build run-backend run-frontend
+.PHONY: dev install install-frontend install-backend build run-backend run-frontend test
 
 # Run both frontend (Vite) and backend (uvicorn) locally
 dev:
@@ -27,3 +27,7 @@ run-backend:
 # Run frontend dev server only (proxies /api to backend :8000)
 run-frontend:
 	cd frontend && npm run dev
+
+# Run backend tests (from repo root; requires: pip install -r backend/requirements.txt pytest)
+test:
+	PYTHONPATH=. python -m pytest backend/tests/ -v

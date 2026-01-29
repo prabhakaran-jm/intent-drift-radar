@@ -16,6 +16,7 @@ from typing import Optional
 from pydantic import ValidationError
 
 from .models import AnalysisResult, AnalyzeRequest, FeedbackItem, Signal
+from .postprocess import apply_postprocess
 
 logger = logging.getLogger(__name__)
 
@@ -377,13 +378,15 @@ def analyze_intent_drift(request: AnalyzeRequest, analysis_id: str) -> AnalysisR
                     logger.error(f"Failed to parse JSON after retries. Raw response (first 500 chars): {raw_response[:500]}")
                     raise ValueError("MODEL_OUTPUT_INVALID: Failed to parse JSON response")
             
-            # Validate against schema
+            # Validate against schema, then apply postprocess guardrails
             try:
                 result = _validate_result(parsed_data, analysis_id)
+                result = apply_postprocess(result)
+                result = AnalysisResult.model_validate(result.model_dump())
                 logger.info(f"Analysis successful (model: {final_model_name}): drift_detected={result.drift_detected}, confidence={result.confidence}")
                 return result
             except ValueError as e:
-                logger.warning(f"Validation failed (retry {retry_count}): {e}")
+                logger.warning(f"Validation/postprocess failed (retry {retry_count}): {e}")
                 if retry_count < max_retries:
                     # Prepend repair instruction
                     repair_instruction = "Return ONLY valid JSON matching the schema. No markdown. No extra text.\n\n"
