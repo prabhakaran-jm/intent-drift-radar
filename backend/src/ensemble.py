@@ -203,7 +203,7 @@ def run_ensemble(
         )
         rid = f"{analysis_id}-{mode}"
         try:
-            return analyze_intent_drift(req, rid, timeout_sec=25)
+            return analyze_intent_drift(req, rid, timeout_sec=50)
         except TimeoutError as e:
             errors.append((mode, "MODEL_TIMEOUT", str(e)))
             return None

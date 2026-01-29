@@ -103,7 +103,7 @@ You can verify which path was used:
 
 *Optional reading for engineers. This does not affect Judge Mode or Quick Demo. Ensemble mode is an optional, live multi-call feature.*
 
-If you use **Ensemble Mode** (3 thinking levels in parallel) and see **HTTP/2 504 (gateway timeout)**: Ensemble does 3 Gemini calls. The service uses a per-call timeout (25s single analyze; 15s per call in ensemble). Cloud Run has a request timeout; if the whole request exceeds it, you get 504. You still see **X-IDR-Mode: ensemble-live**, which confirms the request reached the backend.
+If you use **Ensemble Mode** (3 thinking levels in parallel) and see **HTTP/2 504 (gateway timeout)**: Ensemble does 3 Gemini calls. The service uses a per-call timeout (25s single analyze; 50s per call in ensemble). Cloud Run has a request timeout; if the whole request exceeds it, you get 504. You still see **X-IDR-Mode: ensemble-live**, which confirms the request reached the backend.
 
 To confirm the error body:
 
@@ -118,7 +118,7 @@ You’ll likely see **MODEL_TIMEOUT** in the JSON body.
 **What to change (for engineers):**
 
 1. **Increase Cloud Run request timeout** — Set to **120s**. In `infra/cloudrun.tf` set `timeout = "120s"` in the template. Or: `gcloud run services update intent-drift-radar --region=europe-west2 --timeout=120`
-2. **Per-call timeout** — Ensemble already uses 15s per call; single Analyze stays 25s.
+2. **Per-call timeout** — Ensemble uses 50s per call (in `backend/src/ensemble.py`); single Analyze stays 25s.
 3. **Parallel calls** — Already in place. Partial results (2/3 success) return 200 with `meta.partial=true`.
 
 ---
@@ -146,7 +146,7 @@ You’ll likely see **MODEL_TIMEOUT** in the JSON body.
 
 ## Ensemble Mode (optional)
 
-**Ensemble Mode** runs **3 thinking levels** (low, medium, high) in parallel and shows **consensus + disagreement** without an extra model call. Turn it on via the **Ensemble Mode (3 runs)** toggle in Settings, then click **Analyze**. The UI shows the consensus result and an expandable **Ensemble breakdown** (per-mode drift, confidence, direction, evidence counts and 3/3, 2/3, 1/3 evidence agreement). Consensus is computed **deterministically** (majority vote on drift, median confidence, evidence bucketed by agreement). Hard timeout 35s for the whole ensemble.
+**Ensemble Mode** runs **3 thinking levels** (low, medium, high) in parallel and shows **consensus + disagreement** without an extra model call. Turn it on via the **Ensemble Mode (3 runs)** toggle in Settings, then click **Analyze**. The UI shows the consensus result and an expandable **Ensemble breakdown** (per-mode drift, confidence, direction, evidence counts and 3/3, 2/3, 1/3 evidence agreement). Consensus is computed **deterministically** (majority vote on drift, median confidence, evidence bucketed by agreement). Hard timeout 90s for the whole ensemble; each of the 3 calls gets 50s.
 
 **Why Ensemble matters**
 

@@ -241,6 +241,30 @@ function App() {
     setActiveDay(null)
   }, [])
 
+  const handleRunEnsembleFromDemo = useCallback(async () => {
+    if (signals.length === 0) return
+    setLoading(true)
+    setError(null)
+    try {
+      const ens = await analyzeEnsemble(
+        signals,
+        settings,
+        feedbackHistory.length > 0 ? feedbackHistory : undefined
+      )
+      setResult(ens.consensus)
+      setEnsembleResponse(ens)
+      setIsDemoResult(false)
+      setLastFeedback(null)
+      outputSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } catch (err) {
+      setError(analysisErrorMessage(err))
+      setResult(null)
+      setEnsembleResponse(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [signals, settings, feedbackHistory])
+
   return (
     <div className="app" style={{ fontFamily: 'Manrope, system-ui, sans-serif' }}>
       <HeaderBar
@@ -281,6 +305,7 @@ function App() {
             ensembleMode={ensembleMode}
             onEnsembleModeChange={setEnsembleMode}
             ensembleResponse={ensembleResponse}
+            onRunEnsembleFromDemo={isDemoResult && result ? handleRunEnsembleFromDemo : undefined}
           />
         </main>
 

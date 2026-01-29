@@ -432,6 +432,42 @@ body {
   font-size: 0.95rem;
 }
 
+/* Non-intrusive callout above analysis when Demo cached: discover Ensemble */
+.analysis-panel__ensemble-callout {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-neutral);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.analysis-panel__ensemble-callout-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.analysis-panel__ensemble-callout-btn {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.analysis-panel__ensemble-callout-btn:hover {
+  filter: brightness(1.05);
+}
+
 .analysis-panel__content {
   display: flex;
   flex-direction: column;

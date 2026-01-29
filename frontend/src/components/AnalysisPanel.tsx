@@ -28,6 +28,7 @@ interface AnalysisPanelProps {
   ensembleMode?: boolean
   onEnsembleModeChange?: (on: boolean) => void
   ensembleResponse?: EnsembleResponse | null
+  onRunEnsembleFromDemo?: () => void
 }
 
 function buildSummaryText(result: AnalysisResult): string {
@@ -67,6 +68,7 @@ export function AnalysisPanel({
   ensembleMode = false,
   onEnsembleModeChange,
   ensembleResponse = null,
+  onRunEnsembleFromDemo,
 }: AnalysisPanelProps) {
   const [copied, setCopied] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
@@ -169,7 +171,22 @@ export function AnalysisPanel({
       )}
 
       {!loading && !error && result && (
-        <div className="analysis-panel__content">
+        <>
+          {isDemoResult && onRunEnsembleFromDemo && (
+            <div className="analysis-panel__ensemble-callout">
+              <p className="analysis-panel__ensemble-callout-text">
+                🧠 Ensemble Consensus Available: This analysis can also be run using 3 parallel Gemini calls (low/medium/high) with majority voting and evidence agreement.
+              </p>
+              <button
+                type="button"
+                className="analysis-panel__ensemble-callout-btn"
+                onClick={onRunEnsembleFromDemo}
+              >
+                Run Ensemble (Live)
+              </button>
+            </div>
+          )}
+          <div className="analysis-panel__content">
           <div className="analysis-panel__mode-row">
             {isDemoResult ? (
               <span className="analysis-panel__demo-label">Mode: Demo Cached</span>
@@ -332,7 +349,8 @@ export function AnalysisPanel({
               )}
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   )

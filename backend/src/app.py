@@ -195,7 +195,7 @@ def analyze(request: AnalyzeRequest, response: Response) -> AnalysisResult:
 def analyze_ensemble(request: EnsembleRequest, response: Response) -> EnsembleResponse:
     """
     Run analysis at multiple thinking levels in parallel and return consensus.
-    Requires GEMINI_API_KEY. Hard timeout 35s for the entire ensemble.
+    Requires GEMINI_API_KEY. Hard timeout 90s for the entire ensemble; each call gets 50s.
     """
     if not os.getenv("GEMINI_API_KEY"):
         logger.error("GEMINI_API_KEY environment variable is not set")
