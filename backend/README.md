@@ -206,3 +206,14 @@ All models are defined in `src/models.py`:
 - `AnalysisResult`: complete analysis response
 - `AnalyzeRequest`: request body for /api/analyze (signals: List[Signal], optional settings, optional feedback)
 - `FeedbackRequest`: request body for /api/feedback
+
+## Output guardrails
+
+After parsing and validating model output, `src/postprocess.py` applies guardrails:
+
+- **normalize_drift_signature**: Replace `>>` with `>`, ensure prefix `IDR:v1|`
+- **ensure_reasoning_cards_non_empty**: Reject empty reasoning_cards
+- **normalize_drift_direction**: Map abstract wording to `{baseline_intent.title} → {current_intent.title}`
+- **fix_temporal_compression_refs**: Fill Temporal Compression card refs from evidence days when missing
+
+Tests: `backend/tests/test_postprocess.py`. Run from repo root: `make test`.
