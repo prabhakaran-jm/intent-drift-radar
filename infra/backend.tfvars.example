@@ -1,0 +1,6 @@
+# Example Terraform backend configuration
+# Copy this to backend.tfvars and fill in your bucket name
+# backend.tfvars is gitignored and should NOT be committed
+
+bucket = "your-terraform-state-bucket-name"
+prefix = "intent-drift-radar"

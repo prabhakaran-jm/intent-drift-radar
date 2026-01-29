@@ -28,16 +28,23 @@ gsutil mb -p $PROJECT_ID -l $REGION gs://$BUCKET_NAME
 gsutil versioning set on gs://$BUCKET_NAME
 ```
 
-Then initialize Terraform with the backend:
+Configure the backend by editing `backend.tfvars`:
 
 ```bash
 cd infra/
-terraform init -backend-config="bucket=$BUCKET_NAME" -backend-config="prefix=intent-drift-radar"
+# Edit backend.tfvars and set your bucket name
+# bucket = "your-terraform-state-bucket"
 ```
 
-**Note:** The backend bucket is configured in `versions.tf`. If you need to change it later, use:
+Then initialize Terraform with the backend:
+
 ```bash
-terraform init -reconfigure -backend-config="bucket=NEW_BUCKET_NAME"
+terraform init -backend-config=backend.tfvars
+```
+
+**Note:** The backend configuration is in `backend.tf`. The bucket name is provided via `backend.tfvars` (which is gitignored). If you need to change it later, edit `backend.tfvars` and run:
+```bash
+terraform init -reconfigure -backend-config=backend.tfvars
 ```
 
 ### 2. Configure and apply Terraform
@@ -58,7 +65,7 @@ terraform apply tfplan
 Or pass variables on the command line:
 
 ```bash
-terraform init -backend-config="bucket=YOUR_BUCKET_NAME"
+terraform init -backend-config=backend.tfvars
 terraform apply -var="project_id=YOUR_GCP_PROJECT_ID"
 ```
 
@@ -141,15 +148,25 @@ After `terraform apply`:
 
 ## State and backend
 
-State is stored in **GCS** by default (configured in `versions.tf`). You must create the bucket and initialize with backend config:
+State is stored in **GCS** by default (configured in `backend.tf`). The bucket name is specified in `backend.tfvars` (which is gitignored).
 
-```bash
-# Create bucket
-gsutil mb -p PROJECT_ID -l REGION gs://BUCKET_NAME
+**Setup:**
+1. Create the GCS bucket (if not already created):
+   ```bash
+   gsutil mb -p PROJECT_ID -l REGION gs://BUCKET_NAME
+   gsutil versioning set on gs://$BUCKET_NAME
+   ```
 
-# Initialize with backend
-terraform init -backend-config="bucket=BUCKET_NAME" -backend-config="prefix=intent-drift-radar"
-```
+2. Edit `backend.tfvars` and set your bucket name:
+   ```hcl
+   bucket = "your-terraform-state-bucket"
+   prefix = "intent-drift-radar"
+   ```
+
+3. Initialize Terraform:
+   ```bash
+   terraform init -backend-config=backend.tfvars
+   ```
 
 **Security:** The state bucket should have:
 - Versioning enabled (for recovery)
@@ -158,7 +175,7 @@ terraform init -backend-config="bucket=BUCKET_NAME" -backend-config="prefix=inte
 
 **Migrating from local state:** If you have existing local state:
 ```bash
-terraform init -migrate-state -backend-config="bucket=BUCKET_NAME"
+terraform init -migrate-state -backend-config=backend.tfvars
 ```
 
 ## Destroying resources
@@ -179,6 +196,8 @@ You will be prompted to confirm. All created resources (APIs remain enabled; dis
 | `outputs.tf`           | Output values |
 | `versions.tf`          | Terraform and provider version constraints |
 | `providers.tf`         | Google provider config |
+| `backend.tf`           | GCS backend configuration |
+| `backend.tfvars`       | Backend bucket name (gitignored) |
 | `artifact_registry.tf` | Artifact Registry Docker repo |
 | `service_account.tf`   | Cloud Run runtime service account |
 | `cloudrun.tf`          | Cloud Run service definition |

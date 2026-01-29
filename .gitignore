@@ -222,6 +222,7 @@ infra/*.tfstate
 infra/*.tfstate.*
 infra/*.tfplan
 infra/terraform.tfvars
+infra/backend.tfvars
 infra/*.auto.tfvars
 infra/.terraformrc
 infra/terraform.rc
