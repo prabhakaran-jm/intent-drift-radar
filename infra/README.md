@@ -1,0 +1,143 @@
+# Intent Drift Radar – GCP Infrastructure (Terraform)
+
+Terraform config to provision GCP resources for the Intent Drift Radar Cloud Run service. The service runs the app (frontend + backend) in a single container.
+
+## Prerequisites
+
+- [Terraform](https://www.terraform.io/downloads) >= 1.0
+- [gcloud](https://cloud.google.com/sdk/docs/install) CLI
+- A GCP **project** that already exists
+- You must be able to enable APIs and create resources in that project
+
+## Quick Start
+
+### 1. Configure and apply Terraform
+
+```bash
+cd infra/
+
+# Create a tfvars file (do not commit secrets)
+cat > terraform.tfvars <<EOF
+project_id = "YOUR_GCP_PROJECT_ID"
+region     = "europe-west2"
+EOF
+
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+Or pass variables on the command line:
+
+```bash
+terraform init
+terraform apply -var="project_id=YOUR_GCP_PROJECT_ID"
+```
+
+### 2. Build and push the container image
+
+From the **project root** (parent of `infra/`):
+
+```bash
+# Use the image path from Terraform output
+gcloud builds submit --tag europe-west2-docker.pkg.dev/YOUR_PROJECT_ID/intent-drift-radar/intent-drift-radar:latest .
+```
+
+You need a `Dockerfile` in the project root that builds the app and runs the backend (e.g. port 8080). The repo may already provide one; if not, add one that:
+
+- Builds the frontend (`./scripts/build.sh` or equivalent)
+- Uses a Python image, installs backend deps, runs `uvicorn backend.src.app:app --host 0.0.0.0 --port 8080`
+
+### 3. Deploy the new image to Cloud Run
+
+After the image is in Artifact Registry, point the Cloud Run service at it:
+
+```bash
+gcloud run services update intent-drift-radar \
+  --region=europe-west2 \
+  --image=europe-west2-docker.pkg.dev/YOUR_PROJECT_ID/intent-drift-radar/intent-drift-radar:latest
+```
+
+### 4. Set GEMINI_API_KEY (required for /api/analyze)
+
+**Do not** put `GEMINI_API_KEY` in Terraform or in `terraform.tfvars`; that would risk storing it in state.
+
+**Option A – gcloud (simplest):**
+
+```bash
+gcloud run services update intent-drift-radar \
+  --region=europe-west2 \
+  --set-env-vars GEMINI_API_KEY=your-actual-api-key-here
+```
+
+**Option B – Secret Manager (recommended for production):**
+
+1. Create the secret:  
+   `gcloud secrets create gemini-api-key --data-file=-` (paste key, then Ctrl+D)
+2. Grant the Cloud Run service account access to the secret.
+3. Update the Cloud Run service to use the secret as an env var (e.g. `GEMINI_API_KEY` from `projects/PROJECT_ID/secrets/gemini-api-key/versions/latest`).
+
+Terraform does not configure Secret Manager or the secret env var in this repo; that can be added later.
+
+## Terraform workflow
+
+| Step              | Command / action |
+|-------------------|------------------|
+| Init              | `terraform init` |
+| Plan              | `terraform plan -out=tfplan` |
+| Apply             | `terraform apply tfplan` |
+| View outputs      | `terraform output` |
+| Destroy resources | `terraform destroy` |
+
+## Outputs
+
+After `terraform apply`:
+
+- **cloud_run_url** – URL of the Cloud Run service (works even with placeholder image).
+- **artifact_registry_repo** – Artifact Registry repo ID.
+- **artifact_registry_location** – Full image path for `gcloud builds submit` and `gcloud run services update --image=...`.
+- **suggested_build_command** – Example `gcloud builds submit` command.
+- **suggested_deploy_note** – Reminder to set `GEMINI_API_KEY` after deploy.
+
+## Variables
+
+| Variable                 | Description                          | Default                |
+|--------------------------|--------------------------------------|------------------------|
+| `project_id`             | GCP project ID (required)            | –                      |
+| `region`                 | Region for Run and Artifact Registry | `europe-west2`         |
+| `service_name`           | Cloud Run service name               | `intent-drift-radar`   |
+| `artifact_repo_name`     | Artifact Registry repo name         | `intent-drift-radar`   |
+| `image_name`             | Docker image name                    | `intent-drift-radar`   |
+| `allow_unauthenticated` | Allow public (unauthenticated) calls | `true`                 |
+| `gemini_model`           | Gemini model env value               | `gemini-3-pro-preview` |
+
+## State and backend
+
+State is stored **locally** by default. For production or shared use, use a remote backend (e.g. GCS):
+
+1. Create a GCS bucket for state.
+2. In `versions.tf`, uncomment and fill the `backend "gcs" { ... }` block.
+3. Run `terraform init -migrate-state` to move existing state into the bucket.
+
+## Destroying resources
+
+```bash
+cd infra/
+terraform destroy
+```
+
+You will be prompted to confirm. All created resources (APIs remain enabled; disable manually in the project if desired) will be removed.
+
+## File layout
+
+| File                   | Purpose |
+|------------------------|--------|
+| `main.tf`              | Enable GCP APIs |
+| `variables.tf`         | Input variables |
+| `outputs.tf`           | Output values |
+| `versions.tf`          | Terraform and provider version constraints |
+| `providers.tf`         | Google provider config |
+| `artifact_registry.tf` | Artifact Registry Docker repo |
+| `service_account.tf`   | Cloud Run runtime service account |
+| `cloudrun.tf`          | Cloud Run service definition |
+| `iam.tf`               | IAM bindings (invoker, Cloud Build, etc.) |

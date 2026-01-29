@@ -214,3 +214,10 @@ backend/data/store.json
 backend/static/*
 !backend/static/.gitkeep
 tsconfig.tsbuildinfo
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan
