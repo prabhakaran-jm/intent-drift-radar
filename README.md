@@ -44,7 +44,8 @@ Without Gemini 3, the system cannot function.
 
 ## Screenshot
 
-![Judge Mode](docs/screenshots/judge-mode.png)
+![Judge Mode](docs/screenshots/judge-mode-1.png)
+![Judge Mode](docs/screenshots/judge-mode-2.png)
 
 ---
 
