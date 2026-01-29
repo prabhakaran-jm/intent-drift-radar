@@ -7,14 +7,12 @@ from .models import AnalysisResult, ReasoningCard
 
 def normalize_drift_signature(sig: str) -> str:
     """
-    Normalize drift_signature: replace ">>" with ">" and ensure it starts with "IDR:v1|".
+    Normalize drift_signature: replace ">>" with ">" only.
+    Raises ValueError("drift_signature_invalid") if sig is empty or does not start with "IDR:v1|".
     """
-    if not sig:
-        return "IDR:v1|"
-    out = sig.replace(">>", ">")
-    if not out.startswith("IDR:v1|"):
-        out = "IDR:v1|" + out
-    return out
+    if not sig or not sig.startswith("IDR:v1|"):
+        raise ValueError("drift_signature_invalid")
+    return sig.replace(">>", ">")
 
 
 def ensure_reasoning_cards_non_empty(cards: list) -> list:

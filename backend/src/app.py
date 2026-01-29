@@ -42,6 +42,17 @@ def health() -> dict:
     return {"ok": True}
 
 
+@app.get("/api/version")
+def version() -> dict:
+    """Version information endpoint. Useful for demos and debugging."""
+    return {
+        "git_sha": os.getenv("GIT_SHA", "unknown"),
+        "build_time": os.getenv("BUILD_TIME", "unknown"),
+        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3-pro-preview"),
+        "service_name": os.getenv("SERVICE_NAME", "intent-drift-radar"),
+    }
+
+
 @app.post("/api/analyze", response_model=AnalysisResult)
 def analyze(request: AnalyzeRequest) -> AnalysisResult:
     """
@@ -55,7 +66,12 @@ def analyze(request: AnalyzeRequest) -> AnalysisResult:
         logger.error("GEMINI_API_KEY environment variable is not set")
         raise HTTPException(
             status_code=500,
-            detail="GEMINI_API_KEY environment variable is not set. Please configure the API key to use the analysis service."
+            detail={
+                "error": {
+                    "code": "GEMINI_API_KEY_MISSING",
+                    "message": "GEMINI_API_KEY is not set in the runtime environment."
+                }
+            }
         )
     
     # Generate unique analysis_id
@@ -65,6 +81,17 @@ def analyze(request: AnalyzeRequest) -> AnalysisResult:
         # Call Gemini API
         result = analyze_intent_drift(request, analysis_id)
         return result
+    except TimeoutError as e:
+        logger.error(f"Gemini request timed out: {e}")
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": {
+                    "code": "MODEL_TIMEOUT",
+                    "message": "Gemini request timed out. Try again."
+                }
+            }
+        )
     except ValueError as e:
         error_msg = str(e)
         if error_msg.startswith("MODEL_OUTPUT_INVALID"):
@@ -72,15 +99,22 @@ def analyze(request: AnalyzeRequest) -> AnalysisResult:
             raise HTTPException(
                 status_code=502,
                 detail={
-                    "error": "MODEL_OUTPUT_INVALID",
-                    "message": "The AI model returned invalid output. Please try again."
+                    "error": {
+                        "code": "MODEL_OUTPUT_INVALID",
+                        "message": "Model output did not match required JSON schema."
+                    }
                 }
             )
         elif "GEMINI_API_KEY" in error_msg:
             logger.error(f"API key error: {error_msg}")
             raise HTTPException(
                 status_code=500,
-                detail="GEMINI_API_KEY environment variable is not set. Please configure the API key to use the analysis service."
+                detail={
+                    "error": {
+                        "code": "GEMINI_API_KEY_MISSING",
+                        "message": "GEMINI_API_KEY is not set in the runtime environment."
+                    }
+                }
             )
         else:
             logger.error(f"Analysis error: {error_msg}")

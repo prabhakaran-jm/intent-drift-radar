@@ -10,6 +10,7 @@ We use the Gemini API (API key) at the global endpoint, not Vertex AI.
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Optional
 
@@ -181,13 +182,15 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
     
     Returns:
         tuple of (response_text, final_model_name)
+    
+    Raises:
+        TimeoutError: If the request exceeds 25 seconds
     """
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(model_name)
     
-    try:
-        # Disable web grounding/search
-        response = model.generate_content(
+    def _generate():
+        return model.generate_content(
             prompt,
             generation_config={
                 "temperature": 0.1,  # Lower temperature for more deterministic output
@@ -199,8 +202,14 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
             ],
         )
-        
+    
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_generate)
+            response = future.result(timeout=25)
         return response.text, model_name
+    except FuturesTimeoutError:
+        raise TimeoutError("Gemini API request timed out after 25 seconds")
     except Exception as e:
         error_str = str(e)
         error_type = type(e).__name__
@@ -228,7 +237,12 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
 
 
 def _call_gemini_http(prompt: str, model_name: str, api_key: str) -> str:
-    """Call Gemini API using HTTP requests (fallback)."""
+    """
+    Call Gemini API using HTTP requests (fallback).
+    
+    Raises:
+        TimeoutError: If the request exceeds 25 seconds
+    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     
     headers = {
@@ -254,8 +268,11 @@ def _call_gemini_http(prompt: str, model_name: str, api_key: str) -> str:
         ],
     }
     
-    response = requests.post(url, json=payload, headers=headers, params=params, timeout=60)
-    response.raise_for_status()
+    try:
+        response = requests.post(url, json=payload, headers=headers, params=params, timeout=25)
+        response.raise_for_status()
+    except requests.Timeout:
+        raise TimeoutError("Gemini API request timed out after 25 seconds")
     
     data = response.json()
     

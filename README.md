@@ -229,6 +229,44 @@ For local testing of the production build:
 3. Set `GEMINI_API_KEY` environment variable
 4. Backend serves both API and frontend from one container
 
+## Troubleshooting
+
+### Error Codes
+
+The API returns consistent JSON error responses with `error.code` and `error.message`:
+
+#### `GEMINI_API_KEY_MISSING` (500)
+- **Message**: "GEMINI_API_KEY is not set in the runtime environment."
+- **Fix**: Ensure `GEMINI_API_KEY` is set as an environment variable or injected via Secret Manager. For Cloud Run, use `export SECRET_NAME=gemini-api-key` before deploying (default) and ensure the secret exists with the correct IAM permissions.
+
+#### `MODEL_TIMEOUT` (504)
+- **Message**: "Gemini request timed out. Try again."
+- **Fix**: The Gemini API call exceeded 25 seconds. This can happen with very long prompts or slow API responses. Retry the request or reduce the input size.
+
+#### `MODEL_OUTPUT_INVALID` (502)
+- **Message**: "Model output did not match required JSON schema."
+- **Fix**: The model returned invalid JSON or data that doesn't match the expected schema. The service automatically retries once with a repair instruction. If it still fails, try again or check the model configuration.
+
+### Version Endpoint
+
+The `/api/version` endpoint is useful for demos and debugging:
+
+```bash
+curl <SERVICE_URL>/api/version
+```
+
+Returns:
+```json
+{
+  "git_sha": "<commit SHA or unknown>",
+  "build_time": "<build timestamp or unknown>",
+  "gemini_model": "<model name>",
+  "service_name": "<service name>"
+}
+```
+
+These values come from environment variables (`GIT_SHA`, `BUILD_TIME`, `GEMINI_MODEL`, `SERVICE_NAME`) set during build/deploy.
+
 ## Development
 
 - **Backend API**: FastAPI with Gemini 3 Pro integration

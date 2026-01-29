@@ -19,8 +19,13 @@ def test_normalize_signature_replaces_double_arrow():
     assert normalize_drift_signature("IDR:v1|dir=A>>B|e=1") == "IDR:v1|dir=A>B|e=1"
     assert normalize_drift_signature("IDR:v1|>>|x=1") == "IDR:v1|>|x=1"
     assert normalize_drift_signature("IDR:v1|conf=0.95") == "IDR:v1|conf=0.95"
-    assert normalize_drift_signature("dir=EDTECH>>CREATOR") == "IDR:v1|dir=EDTECH>CREATOR"
-    assert normalize_drift_signature("") == "IDR:v1|"
+
+
+def test_normalize_signature_raises_on_empty_or_missing_prefix():
+    with pytest.raises(ValueError, match="drift_signature_invalid"):
+        normalize_drift_signature("")
+    with pytest.raises(ValueError, match="drift_signature_invalid"):
+        normalize_drift_signature("dir=EDTECH>>CREATOR")
 
 
 def test_empty_reasoning_cards_raises():
