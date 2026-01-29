@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { VersionInfo } from '../types'
 import type { Settings } from '../types'
 
@@ -16,6 +17,7 @@ export function HeaderBar({
   onJudgeMode,
   onDemoMode,
 }: HeaderBarProps) {
+  const [showVerifyHelp, setShowVerifyHelp] = useState(false)
   const gitShaShort =
     versionInfo?.git_sha && versionInfo.git_sha !== 'unknown'
       ? versionInfo.git_sha.slice(0, 7)
@@ -43,19 +45,37 @@ export function HeaderBar({
         )}
       </div>
       <div className="header-bar__actions">
-        <button
-          type="button"
-          className="header-bar__btn header-bar__btn--primary"
-          onClick={onJudgeMode}
-          disabled={loading}
-        >
-          {loading ? 'Analyzing…' : 'Judge Mode'}
-        </button>
+        <div className="header-bar__judge-cta">
+          <button
+            type="button"
+            className="header-bar__btn header-bar__btn--judge"
+            onClick={onJudgeMode}
+            disabled={loading}
+            title="Load demo dataset and see cached analysis in ~5 seconds"
+          >
+            {loading ? 'Loading…' : '▶ Quick Demo'}
+          </button>
+          <span className="header-bar__judge-hint">See it work in ~5 seconds</span>
+          <button
+            type="button"
+            className="header-bar__verify-link"
+            onClick={() => setShowVerifyHelp((v) => !v)}
+            aria-expanded={showVerifyHelp}
+          >
+            How to verify
+          </button>
+          {showVerifyHelp && (
+            <div className="header-bar__verify-help" role="region" aria-label="Verification help">
+              Open DevTools → Network → check <strong>X-IDR-Mode</strong> header: <code>demo-cached</code> vs <code>live-gemini</code>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className="header-bar__btn header-bar__btn--secondary"
           onClick={onDemoMode}
           disabled={loading}
+          title="Load demo dataset only (no analysis)"
         >
           Demo Mode
         </button>

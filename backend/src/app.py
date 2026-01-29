@@ -1,18 +1,20 @@
 """FastAPI app with /api/health, /api/analyze, and /api/feedback endpoints.
 Also serves built frontend from backend/static/ for single-container deployment."""
 
+import json
 import logging
 import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .models import AnalyzeRequest, AnalysisResult, FeedbackRequest
+from .postprocess import apply_postprocess
 from .store import append_feedback, list_feedback
 from .gemini import analyze_intent_drift
 
@@ -23,6 +25,9 @@ app = FastAPI(title="Intent Drift Radar")
 
 # Path to static files directory
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+# Path to cached demo JSON (repo root / docs / ai-studio)
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DEMO_JSON_PATH = REPO_ROOT / "docs" / "ai-studio" / "sample-output.json"
 
 # Add CORS middleware to allow frontend requests
 # In production (Cloud Run), allow all origins since we're serving the frontend from the same domain
@@ -42,6 +47,57 @@ def health() -> dict:
     return {"ok": True}
 
 
+@app.get("/api/demo", response_model=AnalysisResult)
+def demo(response: Response) -> AnalysisResult:
+    """
+    Return cached demo result from docs/ai-studio/sample-output.json.
+    Used by Quick Demo for instant judge evaluation; analysis_id is forced to "demo".
+    """
+    if not DEMO_JSON_PATH.exists():
+        logger.error(f"Demo file not found: {DEMO_JSON_PATH}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "DEMO_UNAVAILABLE",
+                    "message": "Demo result file is missing.",
+                }
+            },
+        )
+    try:
+        with open(DEMO_JSON_PATH, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error(f"Demo file invalid or unreadable: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "DEMO_UNAVAILABLE",
+                    "message": "Demo result file is invalid or unreadable.",
+                }
+            },
+        )
+    data["analysis_id"] = "demo"
+    try:
+        result = AnalysisResult.model_validate(data)
+        result = apply_postprocess(result)
+        result = AnalysisResult.model_validate(result.model_dump())
+    except Exception as e:
+        logger.error(f"Demo validation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "DEMO_UNAVAILABLE",
+                    "message": "Demo result did not match schema.",
+                }
+            },
+        )
+    response.headers["X-IDR-Mode"] = "demo-cached"
+    return result
+
+
 @app.get("/api/version")
 def version() -> dict:
     """Version information endpoint. Useful for demos and debugging."""
@@ -54,7 +110,7 @@ def version() -> dict:
 
 
 @app.post("/api/analyze", response_model=AnalysisResult)
-def analyze(request: AnalyzeRequest) -> AnalysisResult:
+def analyze(request: AnalyzeRequest, response: Response) -> AnalysisResult:
     """
     Analyze signals using Gemini 3 Pro and return AnalysisResult conforming to schema.
     
@@ -76,7 +132,9 @@ def analyze(request: AnalyzeRequest) -> AnalysisResult:
     
     # Generate unique analysis_id
     analysis_id = str(uuid.uuid4())
-    
+    logger.info(f"IDR_LIVE_ANALYZE_CALLED analysis_id={analysis_id}")
+    response.headers["X-IDR-Mode"] = "live-gemini"
+
     try:
         # Call Gemini API
         result = analyze_intent_drift(request, analysis_id)

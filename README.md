@@ -13,6 +13,20 @@
 
 Unlike stateless chat-based tools, Intent Drift Radar operates over a **time-ordered signal stream** (days, notes, decisions) and produces a **deterministic drift decision** that downstream agents can trust.
 
+## Public Demo (No Login)
+
+- **App:** https://intent-drift-radar-2jxc3vgkpa-nw.a.run.app
+- **Quick Demo:** Click **▶ Quick Demo** (instant cached result; no Gemini call)
+- **Health:** https://intent-drift-radar-2jxc3vgkpa-nw.a.run.app/api/health
+- **Version:** https://intent-drift-radar-2jxc3vgkpa-nw.a.run.app/api/version
+- **Architecture:** [docs/architecture.md](docs/architecture.md)
+
+**Pre-submit checks:** `./scripts/judge_check.sh`
+
+## Screenshot
+
+![Judge Mode](docs/screenshots/judge-mode.png)
+
 ---
 
 ## What it does (in one run)
@@ -44,17 +58,25 @@ Intent Drift Radar enables agents to:
 
 ---
 
-## Live demo (Judge Mode)
+## Quick Demo / Judge evaluation
 
-Open the app and click **Judge Mode**.
+- **Quick Demo** uses **cached**, precomputed Gemini analysis from `docs/ai-studio/sample-output.json` for instant judge evaluation and to avoid quota/latency. Click **▶ Quick Demo** to load the demo dataset and see the cached result in ~5 seconds; no live Gemini call is made.
+- **Live Analyze** uses Gemini 3 via `POST /api/analyze`. Use the **Analyze** button after loading or editing signals to run a real Gemini analysis (typical duration 20–30 seconds).
+
+Open the app and click **▶ Quick Demo** to try it:
 
 - A 5-day dataset loads automatically
-- Analysis runs without manual input
+- Cached analysis appears immediately (badge: **Demo Result (Cached)**)
 - Hover evidence or reasoning cards to see **which days caused the decision**
 - Pinned highlights show **multi-day causal links**
 - Copy a clean summary for reports or agent logs
 
-This flow is designed for **under-3-minute evaluation**.
+### Validation
+
+You can verify which path was used:
+
+1. **Network header:** Open DevTools → Network. For the response that returns the analysis, check the **X-IDR-Mode** header: `demo-cached` (Quick Demo) or `live-gemini` (Analyze).
+2. **Cloud Run logs:** Only live analyzes log `IDR_LIVE_ANALYZE_CALLED analysis_id=<uuid>`. Quick Demo does not call Gemini, so that log line will not appear.
 
 ---
 

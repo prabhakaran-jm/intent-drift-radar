@@ -54,7 +54,15 @@ export function TimelinePanel({
       )}
       <div className="timeline-panel__days">
         {groups.length === 0 ? (
-          <p className="timeline-panel__empty">No signals yet. Add one below or load demo data.</p>
+          <div className="timeline-panel__empty-state">
+            <h3 className="timeline-panel__empty-title">No signals loaded</h3>
+            <p className="timeline-panel__empty-body">
+              Click Judge Mode in the header to load a 5-day demo and auto-run analysis.
+            </p>
+            <p className="timeline-panel__empty-hint">
+              Demo Mode loads the dataset without running analysis.
+            </p>
+          </div>
         ) : (
           groups.map(({ day: dayKey, signals: daySignals }) => {
             const isHighlighted = highlightedDays.has(dayKey)

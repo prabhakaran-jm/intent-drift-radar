@@ -7,11 +7,42 @@ import type { AnalysisResult, AnalyzeRequest, FeedbackItem, Settings, Signal, Ve
 // If not set in dev, Vite proxy handles /api routes
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
+/** Error thrown when backend returns {"error":{"code":"...","message":"..."}} */
+export class ApiError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+async function throwIfNotOk(response: Response): Promise<void> {
+  if (response.ok) return
+  let code = 'UNKNOWN'
+  let message = response.statusText || 'Request failed'
+  try {
+    const body = await response.json()
+    if (body && typeof body === 'object' && body.error && typeof body.error === 'object') {
+      if (typeof body.error.code === 'string') code = body.error.code
+      if (typeof body.error.message === 'string') message = body.error.message
+    }
+  } catch {
+    // non-JSON or malformed body; keep code/message as above
+  }
+  throw new ApiError(code, message)
+}
+
 export async function getVersion(): Promise<VersionInfo> {
   const response = await fetch(`${API_BASE}/api/version`)
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`)
-  }
+  await throwIfNotOk(response)
+  return response.json()
+}
+
+export async function getDemo(): Promise<AnalysisResult> {
+  const response = await fetch(`${API_BASE}/api/demo`)
+  await throwIfNotOk(response)
   return response.json()
 }
 
@@ -32,9 +63,7 @@ export async function analyze(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`)
-  }
+  await throwIfNotOk(response)
   return response.json()
 }
 
@@ -48,16 +77,12 @@ export async function submitFeedback(analysisId: string, verdict: 'confirm' | 'r
       comment,
     }),
   })
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`)
-  }
+  await throwIfNotOk(response)
   return response.json()
 }
 
 export async function healthCheck(): Promise<{ ok: boolean }> {
   const response = await fetch(`${API_BASE}/api/health`)
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`)
-  }
+  await throwIfNotOk(response)
   return response.json()
 }

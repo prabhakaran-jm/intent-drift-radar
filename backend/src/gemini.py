@@ -101,31 +101,49 @@ def _format_feedback(feedback: Optional[list[FeedbackItem]]) -> str:
     return "\n".join(lines)
 
 
+def _thinking_level_directive(level: str) -> str:
+    """Return the Thinking Level directive block for the prompt. level is 'low' | 'medium' | 'high'."""
+    level = (level or "medium").lower()
+    if level == "low":
+        return (
+            "Thinking Level: LOW\n"
+            "- evidence: max 3 items (use 4 only if strictly required for drift_detected).\n"
+            "- reasoning_cards: each card body 1–2 sentences only."
+        )
+    if level == "high":
+        return (
+            "Thinking Level: HIGH\n"
+            "- evidence: up to 5 items.\n"
+            "- reasoning_cards: each card body 2–4 sentences.\n"
+            "- reasoning_cards refs: must include at least 2 distinct Day values across all cards."
+        )
+    # medium: no extra constraints
+    return "Thinking Level: MEDIUM\n- No extra constraints; use default depth."
+
+
 def _build_prompt(request: AnalyzeRequest) -> str:
-    """Build the complete prompt from template, signals, and feedback."""
+    """Build the complete prompt from template, signals, feedback, and thinking level."""
     template = _load_prompt_template()
     
-    # Replace the example "Signals:" section with actual signals
+    thinking_level = "medium"
+    if request.settings and getattr(request.settings, "thinking_level", None):
+        thinking_level = request.settings.thinking_level
+    directive_block = _thinking_level_directive(thinking_level)
+    
     signals_section = _format_signals(request.signals)
     feedback_section = _format_feedback(request.feedback)
     
-    # Find where "Signals:" starts in the template and replace everything after it
     if "Signals:" in template:
-        # Split at "Signals:" and keep everything before it
         parts = template.split("Signals:", 1)
-        if len(parts) == 2:
-            # Keep everything before "Signals:" and append new signals section
-            template = parts[0].rstrip() + "\n\n" + signals_section
-        else:
-            template += "\n\n" + signals_section
+        head = parts[0].rstrip() if len(parts) == 2 else template.rstrip()
     else:
-        template += "\n\n" + signals_section
+        head = template.rstrip()
     
-    # Append feedback if present
+    prompt = head + "\n\n" + directive_block + "\n\n" + signals_section
     if feedback_section:
-        template += "\n\n" + feedback_section
+        prompt += "\n\n" + feedback_section
     
-    return template
+    return prompt
 
 
 def _list_available_models(api_key: str) -> list[str]:

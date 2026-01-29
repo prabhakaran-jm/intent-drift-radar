@@ -4,8 +4,23 @@ import { HeaderBar } from './components/HeaderBar'
 import { TimelinePanel } from './components/TimelinePanel'
 import { AnalysisPanel } from './components/AnalysisPanel'
 import { EvidencePanel } from './components/EvidencePanel'
-import { analyze, submitFeedback, getVersion } from './api'
+import { analyze, submitFeedback, getVersion, getDemo, ApiError } from './api'
 import type { Signal, AnalysisResult, Settings, FeedbackItem, VersionInfo } from './types'
+
+function analysisErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    const friendly =
+      err.code === 'GEMINI_API_KEY_MISSING'
+        ? 'Gemini API key not configured'
+        : err.code === 'MODEL_TIMEOUT'
+          ? 'Model timed out'
+          : err.code === 'MODEL_OUTPUT_INVALID'
+            ? 'Model returned invalid structured output'
+            : err.message
+    return err.message !== friendly ? `${friendly} — ${err.message}` : friendly
+  }
+  return err instanceof Error ? err.message : 'Failed to analyze'
+}
 import { DEFAULT_SETTINGS } from './components/SettingsPanel'
 
 const FEEDBACK_STORAGE_KEY = 'intent-drift-feedback'
@@ -36,6 +51,7 @@ function App() {
   const [highlightDriftBanner, setHighlightDriftBanner] = useState(false)
   const [isJudgeModeFlow, setIsJudgeModeFlow] = useState(false)
   const [isDemoDataset, setIsDemoDataset] = useState(false)
+  const [isDemoResult, setIsDemoResult] = useState(false)
 
   // Linking state: evidence ↔ timeline, reasoning ↔ evidence
   const [pinnedDays, setPinnedDays] = useState<Set<string>>(new Set())
@@ -113,10 +129,11 @@ function App() {
           settings
         )
         setResult(analysisResult)
+        setIsDemoResult(false)
         setLastFeedback(null)
         afterAnalyze?.()
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to analyze')
+        setError(analysisErrorMessage(err))
         setResult(null)
       } finally {
         setLoading(false)
@@ -137,6 +154,7 @@ function App() {
     setResult(null)
     setError(null)
     setHighlightDriftBanner(false)
+    setIsDemoResult(false)
     const judgeSettings: Settings = {
       thinking_level: 'high',
       baseline_window_size: 2,
@@ -145,8 +163,9 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const analysisResult = await analyze(DEMO_SIGNALS, undefined, judgeSettings)
-      setResult(analysisResult)
+      const demoResult = await getDemo()
+      setResult(demoResult)
+      setIsDemoResult(true)
       setLastFeedback(null)
       setSignals(DEMO_SIGNALS)
       setSettings(judgeSettings)
@@ -156,9 +175,24 @@ function App() {
         setHighlightDriftBanner(true)
         setTimeout(() => setHighlightDriftBanner(false), 1000)
       }, 100)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to analyze')
-      setResult(null)
+    } catch {
+      try {
+        const analysisResult = await analyze(DEMO_SIGNALS, undefined, judgeSettings)
+        setResult(analysisResult)
+        setIsDemoResult(false)
+        setLastFeedback(null)
+        setSignals(DEMO_SIGNALS)
+        setSettings(judgeSettings)
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(judgeSettings))
+        setTimeout(() => {
+          outputSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          setHighlightDriftBanner(true)
+          setTimeout(() => setHighlightDriftBanner(false), 1000)
+        }, 100)
+      } catch (err) {
+        setError(analysisErrorMessage(err))
+        setResult(null)
+      }
     } finally {
       setLoading(false)
     }
@@ -179,7 +213,8 @@ function App() {
       setLastFeedback(feedbackItem)
       localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(updated))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit feedback')
+      const msg = err instanceof ApiError ? err.message : (err instanceof Error ? err.message : 'Failed to submit feedback')
+      setError(msg)
     }
   }
 
@@ -224,6 +259,7 @@ function App() {
             signalsCount={signals.length}
             outputSectionRef={outputSectionRef}
             isJudgeModeFlow={isJudgeModeFlow}
+            isDemoResult={isDemoResult}
           />
         </main>
 
