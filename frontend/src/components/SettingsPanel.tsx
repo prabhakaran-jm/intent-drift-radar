@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import type { Settings } from '../types'
 
 interface SettingsPanelProps {
@@ -12,30 +11,9 @@ const DEFAULT_SETTINGS: Settings = {
   thinking_level: 'medium',
 }
 
-export function SettingsPanel({ settings: _settings, onSettingsChange }: SettingsPanelProps) {
-  const [localSettings, setLocalSettings] = useState<Settings>(() => {
-    // Initialize from localStorage or use defaults
-    const stored = localStorage.getItem('intent-drift-settings')
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        return { ...DEFAULT_SETTINGS, ...parsed }
-      } catch {
-        return DEFAULT_SETTINGS
-      }
-    }
-    return DEFAULT_SETTINGS
-  })
-
-  useEffect(() => {
-    // Notify parent of initial settings
-    onSettingsChange(localSettings)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
+export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps) {
   const handleChange = (key: keyof Settings, value: string | number) => {
-    const updated = { ...localSettings, [key]: value }
-    setLocalSettings(updated)
+    const updated = { ...settings, [key]: value }
     localStorage.setItem('intent-drift-settings', JSON.stringify(updated))
     onSettingsChange(updated)
   }
@@ -50,7 +28,7 @@ export function SettingsPanel({ settings: _settings, onSettingsChange }: Setting
           <input
             type="number"
             min="1"
-            value={localSettings.baseline_window_size}
+            value={settings.baseline_window_size}
             onChange={(e) => handleChange('baseline_window_size', parseInt(e.target.value) || 1)}
             style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
           />
@@ -61,7 +39,7 @@ export function SettingsPanel({ settings: _settings, onSettingsChange }: Setting
           <input
             type="number"
             min="1"
-            value={localSettings.current_window_size}
+            value={settings.current_window_size}
             onChange={(e) => handleChange('current_window_size', parseInt(e.target.value) || 1)}
             style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
           />
@@ -70,7 +48,7 @@ export function SettingsPanel({ settings: _settings, onSettingsChange }: Setting
         <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>
           Thinking Level
           <select
-            value={localSettings.thinking_level}
+            value={settings.thinking_level}
             onChange={(e) => handleChange('thinking_level', e.target.value as Settings['thinking_level'])}
             style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
           >

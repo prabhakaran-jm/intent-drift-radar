@@ -24,6 +24,27 @@ def ensure_reasoning_cards_non_empty(cards: list) -> list:
     return cards
 
 
+# Tokens that indicate abstract drift_direction; if present (and no →), normalize to intent titles
+_DRIFT_DIRECTION_ABSTRACT_TOKENS = ("Pivot", ">>", "->", ">", "|", "(")
+
+
+def normalize_drift_direction(result: AnalysisResult) -> AnalysisResult:
+    """
+    Normalize drift_direction to concrete format: "{baseline_intent.title} → {current_intent.title}".
+    - If drift_direction already contains "→", return as-is.
+    - Else if it contains any of ["Pivot", ">>", "->", ">", "|", "("], normalize to intent titles.
+    """
+    direction = result.drift_direction
+    if "→" in direction:
+        return result
+    if any(tok in direction for tok in _DRIFT_DIRECTION_ABSTRACT_TOKENS):
+        baseline = result.baseline_intent.title
+        current = result.current_intent.title
+        normalized = f"{baseline} → {current}"
+        return result.model_copy(update={"drift_direction": normalized})
+    return result
+
+
 def fix_temporal_compression_refs(result: AnalysisResult) -> AnalysisResult:
     """
     Find the card with title exactly "Temporal Compression". If its refs is empty or
@@ -62,5 +83,6 @@ def apply_postprocess(result: AnalysisResult) -> AnalysisResult:
     result = result.model_copy(
         update={"drift_signature": normalize_drift_signature(result.drift_signature)}
     )
+    result = normalize_drift_direction(result)
     result = fix_temporal_compression_refs(result)
     return result

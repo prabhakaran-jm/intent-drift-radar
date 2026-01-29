@@ -53,3 +53,10 @@ export interface Settings {
   current_window_size: number
   thinking_level: 'low' | 'medium' | 'high'
 }
+
+export interface VersionInfo {
+  git_sha: string
+  build_time: string
+  gemini_model: string
+  service_name: string
+}

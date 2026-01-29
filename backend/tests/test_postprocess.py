@@ -11,6 +11,7 @@ from backend.src.models import (
 from backend.src.postprocess import (
     ensure_reasoning_cards_non_empty,
     fix_temporal_compression_refs,
+    normalize_drift_direction,
     normalize_drift_signature,
 )
 
@@ -88,3 +89,57 @@ def test_temporal_compression_refs_unchanged_when_refs_contain_day():
     tc = next(c for c in out.reasoning_cards if c.title == "Temporal Compression")
     assert tc.refs == ["Day 2", "Day 4"]
     assert tc.body == "Same."
+
+
+def test_normalize_drift_direction_converts_abstract_to_concrete():
+    baseline = IntentBlock(title="EdTech Product", detail="Educational app")
+    current = IntentBlock(title="Creator Monetization Infrastructure", detail="Monetization tool")
+    result = AnalysisResult(
+        analysis_id="test-id",
+        baseline_intent=baseline,
+        current_intent=current,
+        drift_detected=True,
+        confidence=0.9,
+        drift_direction="Vertical Pivot (Product to Infrastructure)",
+        evidence=[],
+        reasoning_cards=[ReasoningCard(title="Test", body="Test", refs=[])],
+        drift_signature="IDR:v1|conf=0.9",
+    )
+    out = normalize_drift_direction(result)
+    assert out.drift_direction == "EdTech Product → Creator Monetization Infrastructure"
+
+
+def test_normalize_drift_direction_leaves_concrete_unchanged():
+    baseline = IntentBlock(title="EdTech Product", detail="Educational app")
+    current = IntentBlock(title="Creator Tooling", detail="Monetization tool")
+    result = AnalysisResult(
+        analysis_id="test-id",
+        baseline_intent=baseline,
+        current_intent=current,
+        drift_detected=True,
+        confidence=0.9,
+        drift_direction="EdTech Product → Creator Tooling",
+        evidence=[],
+        reasoning_cards=[ReasoningCard(title="Test", body="Test", refs=[])],
+        drift_signature="IDR:v1|conf=0.9",
+    )
+    out = normalize_drift_direction(result)
+    assert out.drift_direction == "EdTech Product → Creator Tooling"
+
+
+def test_normalize_drift_direction_vertical_horizontal_arrows():
+    baseline = IntentBlock(title="EdTech Product", detail="Educational app")
+    current = IntentBlock(title="Creator Monetization Infrastructure", detail="Monetization tool")
+    result = AnalysisResult(
+        analysis_id="test-id",
+        baseline_intent=baseline,
+        current_intent=current,
+        drift_detected=True,
+        confidence=0.9,
+        drift_direction="Vertical (EdTech) >> Horizontal (Creator Economy)",
+        evidence=[],
+        reasoning_cards=[ReasoningCard(title="Test", body="Test", refs=[])],
+        drift_signature="IDR:v1|conf=0.9",
+    )
+    out = normalize_drift_direction(result)
+    assert out.drift_direction == "EdTech Product → Creator Monetization Infrastructure"

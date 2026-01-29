@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import type { AnalysisResult, FeedbackItem } from '../types'
 
 interface OutputPanelProps {
@@ -6,9 +7,43 @@ interface OutputPanelProps {
   error: string | null
   onFeedback: (verdict: 'confirm' | 'reject', comment?: string) => void
   lastFeedback: FeedbackItem | null
+  highlightDriftBanner?: boolean
 }
 
-export function OutputPanel({ result, loading, error, onFeedback, lastFeedback }: OutputPanelProps) {
+function buildSummaryText(result: AnalysisResult): string {
+  const lines: string[] = [
+    'Intent Drift Radar Summary',
+    `- Drift detected: ${result.drift_detected}`,
+    `- Confidence: ${result.confidence.toFixed(2)}`,
+    `- Direction: ${result.drift_direction}`,
+    `- Signature: ${result.drift_signature}`,
+    '',
+    'Top evidence:',
+  ]
+  result.evidence.slice(0, 5).forEach((item, i) => {
+    lines.push(`${i + 1}) ${item.day}: ${item.reason}`)
+  })
+  lines.push('', 'Reasoning cards:')
+  result.reasoning_cards.forEach((card) => {
+    lines.push(`- ${card.title}`)
+  })
+  return lines.join('\n')
+}
+
+export function OutputPanel({ result, loading, error, onFeedback, lastFeedback, highlightDriftBanner = false }: OutputPanelProps) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopySummary = useCallback(async () => {
+    if (!result) return
+    const text = buildSummaryText(result)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // ignore
+    }
+  }, [result])
   if (loading) {
     return (
       <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>
@@ -35,6 +70,27 @@ export function OutputPanel({ result, loading, error, onFeedback, lastFeedback }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', overflowY: 'auto' }}>
+      {/* Copy Summary + Copied toast */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <button
+          onClick={handleCopySummary}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+          }}
+        >
+          Copy Summary
+        </button>
+        {copied && (
+          <span style={{ fontSize: '0.85rem', color: '#28a745', fontWeight: 'bold' }}>Copied</span>
+        )}
+      </div>
+
       {/* Drift Banner */}
       <div
         style={{
@@ -45,6 +101,8 @@ export function OutputPanel({ result, loading, error, onFeedback, lastFeedback }
           textAlign: 'center',
           fontWeight: 'bold',
           fontSize: '1.1rem',
+          transition: 'box-shadow 0.3s ease',
+          boxShadow: highlightDriftBanner ? '0 0 0 4px rgba(255, 193, 7, 0.5)' : 'none',
         }}
       >
         {result.drift_detected ? '⚠️ Drift Detected' : '✓ No Drift Detected'}
