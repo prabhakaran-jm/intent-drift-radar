@@ -11,18 +11,46 @@ Terraform config to provision GCP resources for the Intent Drift Radar Cloud Run
 
 ## Quick Start
 
-### 1. Configure and apply Terraform
+### 1. Set up GCS backend (recommended)
+
+Create a GCS bucket for Terraform state:
+
+```bash
+# Set your project and bucket name
+PROJECT_ID="your-gcp-project-id"
+BUCKET_NAME="your-terraform-state-bucket"
+REGION="europe-west2"
+
+# Create the bucket
+gsutil mb -p $PROJECT_ID -l $REGION gs://$BUCKET_NAME
+
+# Enable versioning (recommended)
+gsutil versioning set on gs://$BUCKET_NAME
+```
+
+Then initialize Terraform with the backend:
+
+```bash
+cd infra/
+terraform init -backend-config="bucket=$BUCKET_NAME" -backend-config="prefix=intent-drift-radar"
+```
+
+**Note:** The backend bucket is configured in `versions.tf`. If you need to change it later, use:
+```bash
+terraform init -reconfigure -backend-config="bucket=NEW_BUCKET_NAME"
+```
+
+### 2. Configure and apply Terraform
 
 ```bash
 cd infra/
 
-# Create a tfvars file (do not commit secrets)
-cat > terraform.tfvars <<EOF
-project_id = "YOUR_GCP_PROJECT_ID"
-region     = "europe-west2"
-EOF
+# Copy the example tfvars file
+cp terraform.tfvars.example terraform.tfvars
 
-terraform init
+# Edit terraform.tfvars with your values (this file is gitignored)
+# At minimum, set: project_id = "your-gcp-project-id"
+
 terraform plan -out=tfplan
 terraform apply tfplan
 ```
@@ -30,7 +58,7 @@ terraform apply tfplan
 Or pass variables on the command line:
 
 ```bash
-terraform init
+terraform init -backend-config="bucket=YOUR_BUCKET_NAME"
 terraform apply -var="project_id=YOUR_GCP_PROJECT_ID"
 ```
 
@@ -113,11 +141,25 @@ After `terraform apply`:
 
 ## State and backend
 
-State is stored **locally** by default. For production or shared use, use a remote backend (e.g. GCS):
+State is stored in **GCS** by default (configured in `versions.tf`). You must create the bucket and initialize with backend config:
 
-1. Create a GCS bucket for state.
-2. In `versions.tf`, uncomment and fill the `backend "gcs" { ... }` block.
-3. Run `terraform init -migrate-state` to move existing state into the bucket.
+```bash
+# Create bucket
+gsutil mb -p PROJECT_ID -l REGION gs://BUCKET_NAME
+
+# Initialize with backend
+terraform init -backend-config="bucket=BUCKET_NAME" -backend-config="prefix=intent-drift-radar"
+```
+
+**Security:** The state bucket should have:
+- Versioning enabled (for recovery)
+- Access restricted to your team/service accounts
+- Consider enabling object-level logging
+
+**Migrating from local state:** If you have existing local state:
+```bash
+terraform init -migrate-state -backend-config="bucket=BUCKET_NAME"
+```
 
 ## Destroying resources
 
