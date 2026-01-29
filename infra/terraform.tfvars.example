@@ -11,3 +11,4 @@ project_id = "your-gcp-project-id"
 # image_name          = "intent-drift-radar"
 # allow_unauthenticated = true
 # gemini_model        = "gemini-3-pro-preview"
+# create_gemini_secret = false

@@ -1,4 +1,11 @@
-"""Gemini 3 Pro integration for intent drift analysis."""
+"""Gemini 3 Pro integration for intent drift analysis.
+
+We use the Gemini API (API key) at the global endpoint, not Vertex AI.
+- SDK: google.generativeai uses https://generativelanguage.googleapis.com (global).
+- HTTP fallback: same global URL. No region/location is sent.
+- For Gemini API calls, location is ignored. We keep GEMINI_LOCATION for forward
+  compatibility with Vertex (logging only; it does not affect request routing).
+"""
 
 import json
 import logging
@@ -18,6 +25,29 @@ MODEL_PREFERENCE_ORDER = [
     "gemini-3-pro",
     "gemini-3-flash-preview",
 ]
+
+
+def _validate_model_location_combo() -> None:
+    """
+    Runtime startup check: warn if preview model is used with non-global location.
+    
+    Preview models (e.g. gemini-3-pro-preview) are global-only. Using them with
+    a regional location (e.g. europe-west2) will cause 404/invalid location errors.
+    This check turns a 2-hour debug into a 5-second log warning.
+    """
+    model = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
+    location = os.getenv("GEMINI_LOCATION", "global")
+    
+    if "preview" in model.lower() and location.lower() != "global":
+        logger.warning(
+            f"⚠️  WARNING: Preview model '{model}' detected with location '{location}'. "
+            f"Preview models are global-only and must use location='global'. "
+            f"You may get 404/invalid location errors. Set GEMINI_LOCATION=global."
+        )
+
+
+# Run validation at module import time (startup check)
+_validate_model_location_combo()
 
 # Try to import Google GenAI SDK, fallback to HTTP
 # Prefer deprecated google.generativeai for now (more stable API)
@@ -307,7 +337,10 @@ def analyze_intent_drift(request: AnalyzeRequest, analysis_id: str) -> AnalysisR
     
     # Get model name from environment (default: gemini-3-pro-preview)
     model_name = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
-    
+    # GEMINI_LOCATION is ignored for Gemini API; kept for forward compatibility with Vertex.
+    location = os.getenv("GEMINI_LOCATION", "global")
+    logger.info(f"Gemini location (for reference): {location}")
+
     # Build prompt
     prompt = _build_prompt(request)
     

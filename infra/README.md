@@ -69,6 +69,8 @@ terraform init -backend-config=backend.tfvars
 terraform apply -var="project_id=YOUR_GCP_PROJECT_ID"
 ```
 
+**If apply fails** with Cloud Run "internal error" (code 7): wait a minute and run `terraform apply` again. Cloud Run uses the default Compute Engine service account so the "gcp-sa-run does not exist" IAM error is avoided.
+
 ### 2. Build and push the container image
 
 From the **project root** (parent of `infra/`):
@@ -95,9 +97,9 @@ gcloud run services update intent-drift-radar \
 
 ### 4. Set GEMINI_API_KEY (required for /api/analyze)
 
-**Do not** put `GEMINI_API_KEY` in Terraform or in `terraform.tfvars`; that would risk storing it in state.
+**Do not** put the key value in Terraform or in `terraform.tfvars`; that would risk storing it in state. Avoid keys in shell history and scripts—use Secret Manager (recommended).
 
-**Option A – gcloud (simplest):**
+**Option A – gcloud (quick, but key can end up in shell history):**
 
 ```bash
 gcloud run services update intent-drift-radar \
@@ -105,14 +107,38 @@ gcloud run services update intent-drift-radar \
   --set-env-vars GEMINI_API_KEY=your-actual-api-key-here
 ```
 
-**Option B – Secret Manager (recommended for production):**
+**Option B – Secret Manager (recommended):** Terraform does the setup:
 
-1. Create the secret:  
-   `gcloud secrets create gemini-api-key --data-file=-` (paste key, then Ctrl+D)
-2. Grant the Cloud Run service account access to the secret.
-3. Update the Cloud Run service to use the secret as an env var (e.g. `GEMINI_API_KEY` from `projects/PROJECT_ID/secrets/gemini-api-key/versions/latest`).
+- Enables the Secret Manager API
+- Creates an empty secret `gemini-api-key` (or you create it via gcloud and import—see below)
+- Grants the Cloud Run service account access to the secret (`roles/secretmanager.secretAccessor`)
+- Configures Cloud Run to use the secret as the `GEMINI_API_KEY` env var
 
-Terraform does not configure Secret Manager or the secret env var in this repo; that can be added later.
+**If you already created the secret via gcloud:** Set `create_gemini_secret = false` so Terraform skips creation and uses the existing secret (IAM and Cloud Run config still applied):
+
+```bash
+# In terraform.tfvars (or -var)
+create_gemini_secret = false
+```
+
+Then `terraform apply` will only add the IAM grant and Cloud Run env config; your secret value is unchanged.
+
+**If Terraform creates the secret:** After `terraform apply`, you only need to **add the secret value** (the key never touches Terraform state or shell history):
+
+```bash
+# Paste your API key, then Ctrl+D
+echo -n "your-api-key-here" | gcloud secrets versions add gemini-api-key --data-file=- --project=YOUR_PROJECT_ID
+```
+
+Or create a file and add it (then delete the file):
+
+```bash
+echo -n "your-api-key-here" > /tmp/gemini-key
+gcloud secrets versions add gemini-api-key --data-file=/tmp/gemini-key --project=YOUR_PROJECT_ID
+rm /tmp/gemini-key
+```
+
+The container gets `GEMINI_API_KEY` from Secret Manager at runtime. If you deploy before adding a version, the env var will be empty until you add one.
 
 ## Terraform workflow
 
@@ -145,6 +171,18 @@ After `terraform apply`:
 | `image_name`             | Docker image name                    | `intent-drift-radar`   |
 | `allow_unauthenticated` | Allow public (unauthenticated) calls | `true`                 |
 | `gemini_model`           | Gemini model env value               | `gemini-3-pro-preview` |
+| `gemini_location`         | Gemini/Vertex location (use `global` for global-only models) | `global` |
+| `create_gemini_secret`    | Create Secret Manager secret; set to `false` if you already created `gemini-api-key` via gcloud | `true` |
+
+## Compute vs model inference
+
+**Compute runs in europe-west2. Model inference happens on Google’s global Gemini API endpoint.**
+
+This app uses the **Gemini API (API key)** at the global endpoint (`generativelanguage.googleapis.com`), not Vertex AI. Cloud Run and Artifact Registry stay in `europe-west2`; only the model call is global.
+
+- **GEMINI_LOCATION**: For Gemini API calls, location is ignored. We keep `GEMINI_LOCATION` for forward compatibility with Vertex (it does not affect request routing).
+- **No Vertex IAM needed** for the runtime service account when using the API key. Store `GEMINI_API_KEY` securely (Secret Manager recommended; see below).
+- **If you switch to Vertex AI** (service account auth), grant the runtime SA `roles/aiplatform.user` and set `GEMINI_LOCATION=global` for global-only models like `gemini-3-pro-preview`.
 
 ## State and backend
 
@@ -201,4 +239,5 @@ You will be prompted to confirm. All created resources (APIs remain enabled; dis
 | `artifact_registry.tf` | Artifact Registry Docker repo |
 | `service_account.tf`   | Cloud Run runtime service account |
 | `cloudrun.tf`          | Cloud Run service definition |
+| `secret.tf`            | Secret Manager secret + IAM for GEMINI_API_KEY |
 | `iam.tf`               | IAM bindings (invoker, Cloud Build, etc.) |

@@ -1,3 +1,38 @@
+output "project_id" {
+  description = "GCP project ID"
+  value       = var.project_id
+}
+
+output "region" {
+  description = "GCP region"
+  value       = var.region
+}
+
+output "service_name" {
+  description = "Cloud Run service name"
+  value       = var.service_name
+}
+
+output "artifact_repo_name" {
+  description = "Artifact Registry repository name"
+  value       = var.artifact_repo_name
+}
+
+output "image_name" {
+  description = "Docker image name (without tag)"
+  value       = var.image_name
+}
+
+output "gemini_model" {
+  description = "Gemini model name for analysis"
+  value       = var.gemini_model
+}
+
+output "gemini_location" {
+  description = "Gemini/Vertex location (global for global-only models)"
+  value       = var.gemini_location
+}
+
 output "cloud_run_url" {
   description = "URL of the deployed Cloud Run service"
   value       = google_cloud_run_v2_service.default.uri

@@ -14,8 +14,9 @@ resource "google_cloud_run_v2_service" "default" {
   project  = var.project_id
 
   template {
-    service_account = google_service_account.cloudrun.email
-
+    # Use default Compute Engine SA to avoid gcp-sa-run agent (can be slow to appear in new projects).
+    # For custom SA later: set service_account = google_service_account.cloudrun.email and add
+    # google_service_account_iam_member.cloudrun_sa_user (roles/iam.serviceAccountUser for gcp-sa-run).
     scaling {
       min_instance_count = 0
       max_instance_count = 10
@@ -33,7 +34,20 @@ resource "google_cloud_run_v2_service" "default" {
         name  = "GEMINI_MODEL"
         value = var.gemini_model
       }
-      # GEMINI_API_KEY: do NOT add here. Set via gcloud after deploy (see README).
+      env {
+        name  = "GEMINI_LOCATION"
+        value = var.gemini_location
+      }
+      # GEMINI_API_KEY from Secret Manager (secret in secret.tf; create or use existing)
+      env {
+        name = "GEMINI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = local.gemini_secret_id_short
+            version = "latest"
+          }
+        }
+      }
     }
   }
 
@@ -45,5 +59,7 @@ resource "google_cloud_run_v2_service" "default" {
   depends_on = [
     google_project_service.run,
     google_artifact_registry_repository.repo,
+    google_secret_manager_secret_iam_member.cloudrun_access,
+    google_secret_manager_secret_iam_member.cloudrun_sa_access,
   ]
 }

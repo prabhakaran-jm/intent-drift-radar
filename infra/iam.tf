@@ -1,4 +1,4 @@
-# Allow unauthenticated invocations (public demo)
+# Allow unauthenticated invocations (public demo). Good for demos; risky beyond that.
 resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   count = var.allow_unauthenticated ? 1 : 0
 
@@ -27,6 +27,7 @@ resource "google_artifact_registry_repository_iam_member" "cloudbuild_writer" {
 }
 
 # Grant Cloud Build SA permission to deploy to Cloud Run
+# For tighter prod: use roles/run.developer + roles/iam.serviceAccountUser scoped to runtime SA
 resource "google_cloud_run_v2_service_iam_member" "cloudbuild_admin" {
   project  = google_cloud_run_v2_service.default.project
   location = google_cloud_run_v2_service.default.location
@@ -36,12 +37,8 @@ resource "google_cloud_run_v2_service_iam_member" "cloudbuild_admin" {
   member = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
-# Allow Cloud Run service agent to use the custom SA (required when template.service_account is set)
-resource "google_service_account_iam_member" "cloudrun_sa_user" {
-  service_account_id = google_service_account.cloudrun.name
-  role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:${data.google_project.project.number}@gcp-sa-run.iam.gserviceaccount.com"
-}
-
-# Optional: if Gemini API requires project-level or SA permissions, add here.
-# For API key–based Gemini, the key is passed via env; no extra IAM needed for the SA.
+# Gemini: we use the Gemini API (API key), not Vertex AI. The runtime SA does not need
+# Vertex permissions. GEMINI_API_KEY is set via gcloud/Secret Manager after deploy.
+# If you switch to Vertex AI (service account auth), grant the runtime SA:
+#   roles/aiplatform.user
+# and set GEMINI_LOCATION=global for global-only models (e.g. gemini-3-pro-preview).

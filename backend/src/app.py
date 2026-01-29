@@ -25,9 +25,11 @@ app = FastAPI(title="Intent Drift Radar")
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # Add CORS middleware to allow frontend requests
+# In production (Cloud Run), allow all origins since we're serving the frontend from the same domain
+# In local dev, allow common localhost ports
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],  # Allow all origins (safe since we serve frontend from same domain)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

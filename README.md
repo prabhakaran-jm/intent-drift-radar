@@ -103,7 +103,126 @@ intent-drift-radar/
 
 ## Deployment
 
-For Cloud Run or similar single-container deployments:
+### Deploy (Terraform + Cloud Run)
+
+**Compute runs in europe-west2. Model inference happens on Google’s global Gemini API endpoint.**
+
+Scripts read Terraform outputs from `infra/` and build/push/deploy to Cloud Run. No secrets are stored in Terraform state. **GEMINI_API_KEY** is required for `/api/analyze`; you can inject it from Secret Manager (recommended) or from an env var (quick dev).
+
+**Steps:**
+
+```bash
+# 1. Provision infrastructure (from repo root)
+terraform -chdir=infra init -backend-config=backend.tfvars
+terraform -chdir=infra apply
+
+# 2. Provide the API key for /api/analyze — choose one:
+#    Recommended (Secret Manager; no key in shell):
+export SECRET_NAME=gemini-api-key   # default; ensure secret exists and runtime SA has secretAccessor
+
+#    Optional quick dev (key in environment):
+# export GEMINI_API_KEY="your-api-key-here"
+
+# 3. Build, push, and deploy
+./scripts/deploy_all.sh
+```
+
+**4. Verify**
+
+```bash
+curl <CLOUD_RUN_URL>/api/health
+```
+
+To confirm Cloud Run gets `GEMINI_API_KEY` from Secret Manager:
+
+```bash
+gcloud run services describe <SERVICE_NAME> --region <REGION> --project <PROJECT_ID> --format='yaml(spec.template.spec.containers[0].env)' | grep -A2 GEMINI_API_KEY
+```
+
+You should see a `valueSource.secretKeyRef` (secret) rather than a literal `value` (env var).
+
+#### Detailed Steps
+
+**Step 1: Provision Infrastructure**
+
+```bash
+cd infra/
+
+# Initialize Terraform with backend
+terraform init -backend-config=backend.tfvars
+
+# Review and apply infrastructure
+terraform plan
+terraform apply
+```
+
+This creates:
+- Artifact Registry Docker repository
+- Cloud Run service (with placeholder image)
+- Required IAM bindings
+
+**Step 2: Deploy Application**
+
+From the **project root**:
+
+```bash
+# Recommended: use Secret Manager (secret must exist; Terraform grants runtime SA access for gemini-api-key)
+export SECRET_NAME=gemini-api-key
+./scripts/deploy_all.sh
+```
+
+Or for quick local testing (key in environment):
+
+```bash
+export GEMINI_API_KEY="your-api-key-here"
+./scripts/deploy_all.sh
+```
+
+The script loads Terraform outputs, builds and pushes the image, then updates Cloud Run. It injects **GEMINI_API_KEY** either from Secret Manager (`SECRET_NAME`) or from your environment (`GEMINI_API_KEY`). **GEMINI_MODEL** is always set from Terraform/default.
+
+**Deploy only** (skip build; requires `IMAGE_URI` set):
+
+```bash
+export IMAGE_URI="europe-west2-docker.pkg.dev/PROJECT_ID/REPO/IMAGE:TAG"
+./scripts/deploy_all.sh --skip-build
+```
+
+**Custom Image Tag**:
+
+```bash
+./scripts/deploy_all.sh --tag v1.0.0
+```
+
+#### Verify Deployment
+
+After deployment, the script prints the service URL. Test it:
+
+```bash
+# Health check
+curl <SERVICE_URL>/api/health
+# Should return: {"ok":true}
+
+# The service URL is also available via:
+cd infra && terraform output -raw cloud_run_url
+```
+
+**Important:** The `/api/analyze` endpoint requires `GEMINI_API_KEY`. Use `export SECRET_NAME=gemini-api-key` (default) so the deploy script injects it from Secret Manager; ensure the secret exists and the Cloud Run runtime SA has `roles/secretmanager.secretAccessor` on it (Terraform does this for the default secret). See [infra/README.md](infra/README.md) for creating the secret and IAM.
+
+#### Manual deployment
+
+Run steps individually:
+
+```bash
+source scripts/tf_outputs.sh
+./scripts/build_push.sh
+./scripts/deploy_cloudrun.sh "$IMAGE_URI"
+```
+
+Or pass image URI directly: `./scripts/deploy_cloudrun.sh <image_uri>`.
+
+### Local Production Build
+
+For local testing of the production build:
 
 1. Build frontend: `./scripts/build.sh`
 2. Deploy backend (which includes built frontend in `backend/static/`)
