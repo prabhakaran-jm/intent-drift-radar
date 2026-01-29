@@ -13,10 +13,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import AnalyzeRequest, AnalysisResult, FeedbackRequest
+from .models import (
+    AnalyzeRequest,
+    AnalysisResult,
+    EnsembleRequest,
+    EnsembleResponse,
+    FeedbackRequest,
+    EnsembleErrorItem,
+    EnsembleMeta,
+)
 from .postprocess import apply_postprocess
 from .store import append_feedback, list_feedback
 from .gemini import analyze_intent_drift
+from .ensemble import run_ensemble, compute_consensus, ENSEMBLE_TIMEOUT_SEC, MIN_SUCCESS_COUNT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,6 +189,89 @@ def analyze(request: AnalyzeRequest, response: Response) -> AnalysisResult:
     except Exception as e:
         logger.error(f"Unexpected error during analysis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Unexpected error during analysis: {str(e)}")
+
+
+@app.post("/api/analyze/ensemble", response_model=EnsembleResponse)
+def analyze_ensemble(request: EnsembleRequest, response: Response) -> EnsembleResponse:
+    """
+    Run analysis at multiple thinking levels in parallel and return consensus.
+    Requires GEMINI_API_KEY. Hard timeout 35s for the entire ensemble.
+    """
+    if not os.getenv("GEMINI_API_KEY"):
+        logger.error("GEMINI_API_KEY environment variable is not set")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "GEMINI_API_KEY_MISSING",
+                    "message": "GEMINI_API_KEY is not set in the runtime environment.",
+                }
+            },
+        )
+    analysis_id = str(uuid.uuid4())
+    logger.info(f"IDR_LIVE_ANALYZE_CALLED analysis_id={analysis_id} (ensemble)")
+    response.headers["X-IDR-Mode"] = "ensemble-live"
+
+    try:
+        results, err_list, duration_ms = run_ensemble(request, analysis_id, timeout_sec=ENSEMBLE_TIMEOUT_SEC)
+    except Exception as e:
+        logger.error(f"Ensemble failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": {
+                    "code": "MODEL_ENSEMBLE_FAILED",
+                    "message": str(e),
+                }
+            },
+        )
+
+    modes = request.modes or ["low", "medium", "high"]
+    meta_errors = [EnsembleErrorItem(mode=m, code=c, message=msg) for m, c, msg in err_list]
+    partial = len(err_list) > 0 and len(results) >= MIN_SUCCESS_COUNT
+
+    if len(results) < MIN_SUCCESS_COUNT:
+        timeout_occurred = any(c == "MODEL_TIMEOUT" for (_, c, _) in err_list)
+        raise HTTPException(
+            status_code=504 if timeout_occurred else 502,
+            detail={
+                "error": {
+                    "code": "MODEL_TIMEOUT" if timeout_occurred else "MODEL_ENSEMBLE_FAILED",
+                    "message": "Ensemble did not get enough successful runs (need at least 2)."
+                    if not timeout_occurred
+                    else "Ensemble timed out.",
+                }
+            },
+        )
+
+    try:
+        consensus, agreement = compute_consensus(results, analysis_id)
+    except ValueError as e:
+        logger.error(f"Consensus computation failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": {
+                    "code": "MODEL_ENSEMBLE_FAILED",
+                    "message": str(e),
+                }
+            },
+        )
+
+    analyses_out = [r for _, r in results]
+    meta = EnsembleMeta(
+        modes=modes,
+        duration_ms=duration_ms,
+        partial=partial,
+        errors=meta_errors if meta_errors else None,
+    )
+    return EnsembleResponse(
+        analysis_id=analysis_id,
+        analyses=analyses_out,
+        consensus=consensus,
+        agreement=agreement,
+        meta=meta,
+    )
 
 
 @app.post("/api/feedback")

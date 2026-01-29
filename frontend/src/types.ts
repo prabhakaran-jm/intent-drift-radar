@@ -60,3 +60,44 @@ export interface VersionInfo {
   gemini_model: string
   service_name: string
 }
+
+/** Ensemble: evidence agreement buckets (3_of_3, 2_of_3, 1_of_3) */
+export interface EvidenceAgreement {
+  '3_of_3': EvidenceItem[]
+  '2_of_3': EvidenceItem[]
+  '1_of_3': EvidenceItem[]
+}
+
+export interface DirectionVote {
+  value: string
+  count: number
+}
+
+export interface Agreement {
+  drift_detected_votes: { true: number; false: number }
+  confidence_min: number
+  confidence_max: number
+  direction_votes: DirectionVote[]
+  evidence_agreement: EvidenceAgreement
+}
+
+export interface EnsembleErrorItem {
+  mode: string
+  code: string
+  message: string
+}
+
+export interface EnsembleMeta {
+  modes: string[]
+  duration_ms: number
+  partial: boolean
+  errors?: EnsembleErrorItem[] | null
+}
+
+export interface EnsembleResponse {
+  analysis_id: string
+  analyses: AnalysisResult[]
+  consensus: AnalysisResult
+  agreement: Agreement
+  meta: EnsembleMeta
+}

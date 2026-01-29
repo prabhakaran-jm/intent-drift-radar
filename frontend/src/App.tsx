@@ -4,8 +4,8 @@ import { HeaderBar } from './components/HeaderBar'
 import { TimelinePanel } from './components/TimelinePanel'
 import { AnalysisPanel } from './components/AnalysisPanel'
 import { EvidencePanel } from './components/EvidencePanel'
-import { analyze, submitFeedback, getVersion, getDemo, ApiError } from './api'
-import type { Signal, AnalysisResult, Settings, FeedbackItem, VersionInfo } from './types'
+import { analyze, analyzeEnsemble, submitFeedback, getVersion, getDemo, ApiError } from './api'
+import type { Signal, AnalysisResult, Settings, FeedbackItem, VersionInfo, EnsembleResponse } from './types'
 
 function analysisErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -16,7 +16,9 @@ function analysisErrorMessage(err: unknown): string {
           ? 'Model timed out'
           : err.code === 'MODEL_OUTPUT_INVALID'
             ? 'Model returned invalid structured output'
-            : err.message
+            : err.code === 'MODEL_ENSEMBLE_FAILED'
+              ? 'Ensemble did not get enough successful runs'
+              : err.message
     return err.message !== friendly ? `${friendly} — ${err.message}` : friendly
   }
   return err instanceof Error ? err.message : 'Failed to analyze'
@@ -52,6 +54,8 @@ function App() {
   const [isJudgeModeFlow, setIsJudgeModeFlow] = useState(false)
   const [isDemoDataset, setIsDemoDataset] = useState(false)
   const [isDemoResult, setIsDemoResult] = useState(false)
+  const [ensembleMode, setEnsembleMode] = useState(false)
+  const [ensembleResponse, setEnsembleResponse] = useState<EnsembleResponse | null>(null)
 
   // Linking state: evidence ↔ timeline, reasoning ↔ evidence
   const [pinnedDays, setPinnedDays] = useState<Set<string>>(new Set())
@@ -122,24 +126,38 @@ function App() {
       }
       setLoading(true)
       setError(null)
+      setEnsembleResponse(null)
       try {
-        const analysisResult = await analyze(
-          signals,
-          feedbackHistory.length > 0 ? feedbackHistory : undefined,
-          settings
-        )
-        setResult(analysisResult)
-        setIsDemoResult(false)
+        if (ensembleMode) {
+          const ens = await analyzeEnsemble(
+            signals,
+            settings,
+            feedbackHistory.length > 0 ? feedbackHistory : undefined
+          )
+          setResult(ens.consensus)
+          setEnsembleResponse(ens)
+          setIsDemoResult(false)
+        } else {
+          const analysisResult = await analyze(
+            signals,
+            feedbackHistory.length > 0 ? feedbackHistory : undefined,
+            settings
+          )
+          setResult(analysisResult)
+          setEnsembleResponse(null)
+          setIsDemoResult(false)
+        }
         setLastFeedback(null)
         afterAnalyze?.()
       } catch (err) {
         setError(analysisErrorMessage(err))
         setResult(null)
+        setEnsembleResponse(null)
       } finally {
         setLoading(false)
       }
     },
-    [signals, feedbackHistory, settings]
+    [signals, feedbackHistory, settings, ensembleMode]
   )
 
   const handleJudgeMode = async () => {
@@ -260,6 +278,9 @@ function App() {
             outputSectionRef={outputSectionRef}
             isJudgeModeFlow={isJudgeModeFlow}
             isDemoResult={isDemoResult}
+            ensembleMode={ensembleMode}
+            onEnsembleModeChange={setEnsembleMode}
+            ensembleResponse={ensembleResponse}
           />
         </main>
 

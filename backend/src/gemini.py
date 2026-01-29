@@ -194,7 +194,13 @@ def _find_fallback_model(api_key: str, current_model: str) -> Optional[str]:
     return None
 
 
-def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: bool = True) -> tuple[str, str]:
+def _call_gemini_sdk(
+    prompt: str,
+    model_name: str,
+    api_key: str,
+    use_fallback: bool = True,
+    timeout_sec: int = 25,
+) -> tuple[str, str]:
     """
     Call Gemini API using the official SDK (google.generativeai).
     
@@ -202,7 +208,7 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
         tuple of (response_text, final_model_name)
     
     Raises:
-        TimeoutError: If the request exceeds 25 seconds
+        TimeoutError: If the request exceeds timeout_sec
     """
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(model_name)
@@ -224,10 +230,10 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(_generate)
-            response = future.result(timeout=25)
+            response = future.result(timeout=timeout_sec)
         return response.text, model_name
     except FuturesTimeoutError:
-        raise TimeoutError("Gemini API request timed out after 25 seconds")
+        raise TimeoutError(f"Gemini API request timed out after {timeout_sec} seconds")
     except Exception as e:
         error_str = str(e)
         error_type = type(e).__name__
@@ -244,7 +250,9 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
                 if fallback_model and fallback_model != model_name:
                     logger.info(f"Retrying with fallback model: {fallback_model}")
                     # Retry with fallback model (no further fallback)
-                    return _call_gemini_sdk(prompt, fallback_model, api_key, use_fallback=False)
+                    return _call_gemini_sdk(
+                        prompt, fallback_model, api_key, use_fallback=False, timeout_sec=timeout_sec
+                    )
                 else:
                     raise ValueError(f"Model {model_name} not found and no suitable fallback available")
             else:
@@ -254,12 +262,12 @@ def _call_gemini_sdk(prompt: str, model_name: str, api_key: str, use_fallback: b
             raise
 
 
-def _call_gemini_http(prompt: str, model_name: str, api_key: str) -> str:
+def _call_gemini_http(prompt: str, model_name: str, api_key: str, timeout_sec: int = 25) -> str:
     """
     Call Gemini API using HTTP requests (fallback).
     
     Raises:
-        TimeoutError: If the request exceeds 25 seconds
+        TimeoutError: If the request exceeds timeout_sec
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     
@@ -287,10 +295,10 @@ def _call_gemini_http(prompt: str, model_name: str, api_key: str) -> str:
     }
     
     try:
-        response = requests.post(url, json=payload, headers=headers, params=params, timeout=25)
+        response = requests.post(url, json=payload, headers=headers, params=params, timeout=timeout_sec)
         response.raise_for_status()
     except requests.Timeout:
-        raise TimeoutError("Gemini API request timed out after 25 seconds")
+        raise TimeoutError(f"Gemini API request timed out after {timeout_sec} seconds")
     
     data = response.json()
     
@@ -351,13 +359,16 @@ def _validate_result(data: dict, analysis_id: str) -> AnalysisResult:
         raise ValueError(f"Validation failed: {e}")
 
 
-def analyze_intent_drift(request: AnalyzeRequest, analysis_id: str) -> AnalysisResult:
+def analyze_intent_drift(
+    request: AnalyzeRequest, analysis_id: str, timeout_sec: int = 25
+) -> AnalysisResult:
     """
     Analyze intent drift using Gemini 3 Pro.
     
     Args:
         request: AnalyzeRequest with signals and optional feedback
         analysis_id: Unique identifier for this analysis
+        timeout_sec: Per-call timeout (default 25; use 15 for ensemble to reduce 504 risk)
         
     Returns:
         AnalysisResult validated against schema
@@ -391,9 +402,13 @@ def analyze_intent_drift(request: AnalyzeRequest, analysis_id: str) -> AnalysisR
         try:
             # Call API
             if SDK_AVAILABLE:
-                raw_response, final_model_name = _call_gemini_sdk(prompt, model_name, api_key)
+                raw_response, final_model_name = _call_gemini_sdk(
+                    prompt, model_name, api_key, use_fallback=True, timeout_sec=timeout_sec
+                )
             else:
-                raw_response = _call_gemini_http(prompt, model_name, api_key)
+                raw_response = _call_gemini_http(
+                    prompt, model_name, api_key, timeout_sec=timeout_sec
+                )
                 final_model_name = model_name
             
             logger.info(f"Gemini response received (retry: {retry_count}, model: {final_model_name})")

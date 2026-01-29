@@ -9,7 +9,7 @@ const LOADING_STEPS = [
 
 const STEP_INTERVAL_MS = 6000
 const LONG_WAIT_THRESHOLD_SEC = 20
-import type { AnalysisResult, FeedbackItem, Settings } from '../types'
+import type { AnalysisResult, FeedbackItem, Settings, EnsembleResponse } from '../types'
 
 interface AnalysisPanelProps {
   result: AnalysisResult | null
@@ -25,6 +25,9 @@ interface AnalysisPanelProps {
   outputSectionRef: React.RefObject<HTMLDivElement>
   isJudgeModeFlow?: boolean
   isDemoResult?: boolean
+  ensembleMode?: boolean
+  onEnsembleModeChange?: (on: boolean) => void
+  ensembleResponse?: EnsembleResponse | null
 }
 
 function buildSummaryText(result: AnalysisResult): string {
@@ -61,10 +64,15 @@ export function AnalysisPanel({
   outputSectionRef,
   isJudgeModeFlow = false,
   isDemoResult = false,
+  ensembleMode = false,
+  onEnsembleModeChange,
+  ensembleResponse = null,
 }: AnalysisPanelProps) {
   const [copied, setCopied] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [showEnsembleBreakdown, setShowEnsembleBreakdown] = useState(false)
+  const [showProveIt, setShowProveIt] = useState(false)
 
   useEffect(() => {
     if (!loading) {
@@ -121,7 +129,12 @@ export function AnalysisPanel({
         </button>
       )}
 
-      <SettingsPanel settings={settings} onSettingsChange={onSettingsChange} />
+      <SettingsPanel
+        settings={settings}
+        onSettingsChange={onSettingsChange}
+        ensembleMode={ensembleMode}
+        onEnsembleModeChange={onEnsembleModeChange}
+      />
 
       {loading && (
         <div className="analysis-panel__loading">
@@ -157,11 +170,30 @@ export function AnalysisPanel({
 
       {!loading && !error && result && (
         <div className="analysis-panel__content">
-          {isDemoResult ? (
-            <p className="analysis-panel__demo-label">Demo Result (Cached)</p>
-          ) : (
-            <p className="analysis-panel__demo-label analysis-panel__demo-label--live">Live Gemini</p>
-          )}
+          <div className="analysis-panel__mode-row">
+            {isDemoResult ? (
+              <span className="analysis-panel__demo-label">Mode: Demo Cached</span>
+            ) : ensembleResponse ? (
+              <span className="analysis-panel__demo-label analysis-panel__demo-label--live">
+                Mode: Ensemble Live (Consensus {ensembleResponse.agreement.drift_detected_votes.true + ensembleResponse.agreement.drift_detected_votes.false}/3)
+              </span>
+            ) : (
+              <span className="analysis-panel__demo-label analysis-panel__demo-label--live">Mode: Live Gemini</span>
+            )}
+            <button
+              type="button"
+              className="analysis-panel__prove-it"
+              onClick={() => setShowProveIt((v) => !v)}
+              aria-expanded={showProveIt}
+            >
+              prove it
+            </button>
+            {showProveIt && (
+              <div className="analysis-panel__prove-it-help" role="region" aria-label="How to verify">
+                Open DevTools → Network → find the request that returned this result → check response header <strong>X-IDR-Mode</strong>: <code>demo-cached</code>, <code>live-gemini</code>, or <code>ensemble-live</code>.
+              </div>
+            )}
+          </div>
           <div className="analysis-panel__copy-row">
             <button
               type="button"
@@ -246,6 +278,58 @@ export function AnalysisPanel({
             <div className="analysis-panel__block analysis-panel__one-question">
               <h3 className="analysis-panel__block-title">Clarifying Question</h3>
               <div className="analysis-panel__one-question-text">{result.one_question}</div>
+            </div>
+          )}
+
+          {ensembleResponse && (
+            <div className="analysis-panel__ensemble-breakdown">
+              <button
+                type="button"
+                className="analysis-panel__ensemble-toggle"
+                onClick={() => setShowEnsembleBreakdown((v) => !v)}
+                aria-expanded={showEnsembleBreakdown}
+              >
+                {showEnsembleBreakdown ? '▼' : '▶'} Ensemble breakdown
+              </button>
+              {showEnsembleBreakdown && (
+                <div className="analysis-panel__ensemble-content">
+                  <table className="analysis-panel__ensemble-table">
+                    <thead>
+                      <tr>
+                        <th>Mode</th>
+                        <th>Drift?</th>
+                        <th>Conf</th>
+                        <th>Direction</th>
+                        <th>Evidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ensembleResponse.analyses.map((a) => {
+                        const modeLabel = a.analysis_id.includes('-') ? a.analysis_id.split('-').pop() : '—'
+                        return (
+                        <tr key={a.analysis_id}>
+                          <td>{modeLabel}</td>
+                          <td>{a.drift_detected ? 'Yes' : 'No'}</td>
+                          <td>{(a.confidence * 100).toFixed(0)}%</td>
+                          <td className="analysis-panel__ensemble-direction">{a.drift_direction}</td>
+                          <td>{a.evidence.length}</td>
+                        </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="analysis-panel__ensemble-chips">
+                    <span className="analysis-panel__ensemble-chip">3/3 evidence: {ensembleResponse.agreement.evidence_agreement['3_of_3'].length}</span>
+                    <span className="analysis-panel__ensemble-chip">2/3 evidence: {ensembleResponse.agreement.evidence_agreement['2_of_3'].length}</span>
+                    <span className="analysis-panel__ensemble-chip">1/3 evidence: {ensembleResponse.agreement.evidence_agreement['1_of_3'].length}</span>
+                  </div>
+                  {ensembleResponse.meta.partial && ensembleResponse.meta.errors && ensembleResponse.meta.errors.length > 0 && (
+                    <p className="analysis-panel__ensemble-partial">
+                      Partial: {ensembleResponse.meta.errors.map((e) => `${e.mode}: ${e.code}`).join('; ')}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

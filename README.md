@@ -23,6 +23,25 @@ Unlike stateless chat-based tools, Intent Drift Radar operates over a **time-ord
 
 **Pre-submit checks:** `./scripts/judge_check.sh`
 
+## Gemini 3 Integration (at a glance)
+
+Intent Drift Radar uses **Gemini 3 Pro** as a temporal reasoning engine, not a chatbot.
+
+Gemini 3 is responsible for:
+- Interpreting **time-ordered signals** (days, notes, decisions)
+- Identifying **baseline vs current intent**
+- Producing **evidence-backed reasoning**
+- Emitting a **structured, machine-readable decision**
+
+The system enforces reliability through:
+- Explicit JSON schema in prompts
+- Pydantic validation
+- Postprocessing guardrails
+- Retry-with-repair
+- Model fallback and timeouts
+
+Without Gemini 3, the system cannot function.
+
 ## Screenshot
 
 ![Judge Mode](docs/screenshots/judge-mode.png)
@@ -46,7 +65,7 @@ This turns Gemini 3’s reasoning into a **verifiable decision layer**, not just
 
 ## Why this matters
 
-Long-running agents fail when intent changes silently.
+Long-running agents fail when intent changes silently. Primary users are builders of autonomous agents, copilots, and long-running AI systems that must detect intent change reliably.
 
 Intent Drift Radar enables agents to:
 - pause execution,
@@ -63,6 +82,8 @@ Intent Drift Radar enables agents to:
 - **Quick Demo** uses **cached**, precomputed Gemini analysis from `docs/ai-studio/sample-output.json` for instant judge evaluation and to avoid quota/latency. Click **▶ Quick Demo** to load the demo dataset and see the cached result in ~5 seconds; no live Gemini call is made.
 - **Live Analyze** uses Gemini 3 via `POST /api/analyze`. Use the **Analyze** button after loading or editing signals to run a real Gemini analysis (typical duration 20–30 seconds).
 
+Quick Demo exists only to reduce evaluation latency; all logic, schema validation, guardrails, and UI behavior are identical to live Gemini analysis.
+
 Open the app and click **▶ Quick Demo** to try it:
 
 - A 5-day dataset loads automatically
@@ -77,6 +98,28 @@ You can verify which path was used:
 
 1. **Network header:** Open DevTools → Network. For the response that returns the analysis, check the **X-IDR-Mode** header: `demo-cached` (Quick Demo) or `live-gemini` (Analyze).
 2. **Cloud Run logs:** Only live analyzes log `IDR_LIVE_ANALYZE_CALLED analysis_id=<uuid>`. Quick Demo does not call Gemini, so that log line will not appear.
+
+### Advanced: Ensemble Mode Timeouts (Why 504 Can Occur)
+
+*Optional reading for engineers. This does not affect Judge Mode or Quick Demo. Ensemble mode is an optional, live multi-call feature.*
+
+If you use **Ensemble Mode** (3 thinking levels in parallel) and see **HTTP/2 504 (gateway timeout)**: Ensemble does 3 Gemini calls. The service uses a per-call timeout (25s single analyze; 15s per call in ensemble). Cloud Run has a request timeout; if the whole request exceeds it, you get 504. You still see **X-IDR-Mode: ensemble-live**, which confirms the request reached the backend.
+
+To confirm the error body:
+
+```bash
+curl -s -L -i -X POST https://intent-drift-radar-2jxc3vgkpa-nw.a.run.app/api/analyze/ensemble \
+  -H "Content-Type: application/json" \
+  -d '{"signals":[{"day":"Day 1","type":"declaration","content":"Build an app."},{"day":"Day 2","type":"research","content":"Looked at APIs."}],"modes":["low","medium","high"]}'
+```
+
+You’ll likely see **MODEL_TIMEOUT** in the JSON body.
+
+**What to change (for engineers):**
+
+1. **Increase Cloud Run request timeout** — Set to **120s**. In `infra/cloudrun.tf` set `timeout = "120s"` in the template. Or: `gcloud run services update intent-drift-radar --region=europe-west2 --timeout=120`
+2. **Per-call timeout** — Ensemble already uses 15s per call; single Analyze stays 25s.
+3. **Parallel calls** — Already in place. Partial results (2/3 success) return 200 with `meta.partial=true`.
 
 ---
 
@@ -98,6 +141,18 @@ You can verify which path was used:
 - **Human-reviewable reasoning cards**
 - **Deterministic drift signatures**
 - **Feedback loop** (confirm / reject drift) for iterative refinement
+
+---
+
+## Ensemble Mode (optional)
+
+**Ensemble Mode** runs **3 thinking levels** (low, medium, high) in parallel and shows **consensus + disagreement** without an extra model call. Turn it on via the **Ensemble Mode (3 runs)** toggle in Settings, then click **Analyze**. The UI shows the consensus result and an expandable **Ensemble breakdown** (per-mode drift, confidence, direction, evidence counts and 3/3, 2/3, 1/3 evidence agreement). Consensus is computed **deterministically** (majority vote on drift, median confidence, evidence bucketed by agreement). Hard timeout 35s for the whole ensemble.
+
+**Why Ensemble matters**
+
+- Shows multi-call orchestration
+- Surfaces disagreement
+- Consensus output is deterministic and machine-parseable
 
 ---
 

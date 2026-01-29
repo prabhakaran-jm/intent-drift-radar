@@ -14,6 +14,9 @@ resource "google_cloud_run_v2_service" "default" {
   project  = var.project_id
 
   template {
+    # Request timeout: 120s so ensemble (3 parallel Gemini calls) can finish without 504
+    timeout = "120s"
+
     # Use default Compute Engine SA to avoid gcp-sa-run agent (can be slow to appear in new projects).
     # For custom SA later: set service_account = google_service_account.cloudrun.email and add
     # google_service_account_iam_member.cloudrun_sa_user (roles/iam.serviceAccountUser for gcp-sa-run).

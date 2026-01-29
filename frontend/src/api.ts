@@ -1,6 +1,6 @@
 /** API client for backend */
 
-import type { AnalysisResult, AnalyzeRequest, FeedbackItem, Settings, Signal, VersionInfo } from './types'
+import type { AnalysisResult, AnalyzeRequest, EnsembleResponse, FeedbackItem, Settings, Signal, VersionInfo } from './types'
 
 // Use relative paths by default (same-origin for production)
 // In dev mode, VITE_API_BASE can override to point to backend (e.g., http://localhost:8000)
@@ -23,13 +23,23 @@ async function throwIfNotOk(response: Response): Promise<void> {
   let code = 'UNKNOWN'
   let message = response.statusText || 'Request failed'
   try {
-    const body = await response.json()
-    if (body && typeof body === 'object' && body.error && typeof body.error === 'object') {
-      if (typeof body.error.code === 'string') code = body.error.code
-      if (typeof body.error.message === 'string') message = body.error.message
-    }
+    const body = (await response.json()) as Record<string, unknown>
+    // FastAPI HTTPException returns { detail: { error: { code, message } } } or { detail: "string" }
+    const detail = body?.detail
+    const errBlock =
+      detail && typeof detail === 'object' && (detail as Record<string, unknown>).error
+        ? (detail as { error: { code?: string; message?: string } }).error
+        : body?.error && typeof body.error === 'object'
+          ? (body.error as { code?: string; message?: string })
+          : null
+    if (errBlock && typeof errBlock.code === 'string') code = errBlock.code
+    if (errBlock && typeof errBlock.message === 'string') message = errBlock.message
   } catch {
-    // non-JSON or malformed body; keep code/message as above
+    // non-JSON or gateway timeout body; use status-based message
+    if (response.status === 504) {
+      code = 'MODEL_TIMEOUT'
+      message = 'Request timed out. For Ensemble, try Quick Demo instead or increase Cloud Run timeout (see README).'
+    }
   }
   throw new ApiError(code, message)
 }
@@ -59,6 +69,21 @@ export async function analyze(
     payload.settings = settings
   }
   const response = await fetch(`${API_BASE}/api/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  await throwIfNotOk(response)
+  return response.json()
+}
+
+export async function analyzeEnsemble(
+  signals: Signal[],
+  settings?: Settings,
+  feedback?: FeedbackItem[]
+): Promise<EnsembleResponse> {
+  const payload = { signals, settings: settings ?? undefined, feedback: feedback && feedback.length > 0 ? feedback : undefined }
+  const response = await fetch(`${API_BASE}/api/analyze/ensemble`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

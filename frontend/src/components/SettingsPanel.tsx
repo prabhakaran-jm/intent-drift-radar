@@ -3,6 +3,8 @@ import type { Settings } from '../types'
 interface SettingsPanelProps {
   settings: Settings
   onSettingsChange: (settings: Settings) => void
+  ensembleMode?: boolean
+  onEnsembleModeChange?: (on: boolean) => void
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -11,7 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   thinking_level: 'medium',
 }
 
-export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps) {
+export function SettingsPanel({ settings, onSettingsChange, ensembleMode = false, onEnsembleModeChange }: SettingsPanelProps) {
   const handleChange = (key: keyof Settings, value: string | number) => {
     const updated = { ...settings, [key]: value }
     localStorage.setItem('intent-drift-settings', JSON.stringify(updated))
@@ -57,6 +59,19 @@ export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps
             <option value="high">High</option>
           </select>
         </label>
+
+        {onEnsembleModeChange != null && (
+          <label className="settings-panel__ensemble-toggle" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={ensembleMode}
+              onChange={(e) => onEnsembleModeChange(e.target.checked)}
+              aria-label="Ensemble Mode (3 runs)"
+            />
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Ensemble Mode (3 runs)</span>
+            <span style={{ fontSize: '0.75rem', color: '#555' }}>Shows disagreement and consensus (slower)</span>
+          </label>
+        )}
       </div>
     </div>
   )
