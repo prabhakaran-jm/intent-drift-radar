@@ -1,3 +1,7 @@
 export { SignalsPanel, DEMO_SIGNALS } from './SignalsPanel'
 export { SettingsPanel, DEFAULT_SETTINGS } from './SettingsPanel'
 export { OutputPanel } from './OutputPanel'
+export { HeaderBar } from './HeaderBar'
+export { TimelinePanel } from './TimelinePanel'
+export { AnalysisPanel } from './AnalysisPanel'
+export { EvidencePanel } from './EvidencePanel'

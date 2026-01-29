@@ -5,7 +5,7 @@ interface SettingsPanelProps {
   onSettingsChange: (settings: Settings) => void
 }
 
-const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Settings = {
   baseline_window_size: 2,
   current_window_size: 2,
   thinking_level: 'medium',
@@ -62,4 +62,3 @@ export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps
   )
 }
 
-export { DEFAULT_SETTINGS }
